@@ -1,6 +1,2 @@
-from .synthesis import synthesize
+from .synthesis import Sythesiser
 
-try:
-    from .synthesis import synthesize_qiskit_circuit
-except ImportError:
-    pass

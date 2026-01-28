@@ -8,7 +8,7 @@ import numpy as np
 import psutil
 from numpy.typing import NDArray
 
-from gates import GATES
+from trasyn.gates import GATES
 
 MAX_CACHE_LEN = 8
 

@@ -1,15 +1,23 @@
 import json
 import os
 import warnings
+from dataclasses import dataclass
 from itertools import product
 from math import log
-from typing import Literal, Sequence
+from typing import Literal, Sequence, Iterable
+from tqdm import tqdm
+
 
 import numpy as np
+from hypothesis.internal.conjecture.shrinking import Collection
 from numpy.random import Generator
 from numpy.typing import NDArray
 from matplotlib import pyplot as plt
+from sympy.physics.quantum.density import fidelity
 
+import os
+import pickle
+from pathlib import Path
 
 try:
     import cupy as cp
@@ -22,9 +30,9 @@ except ModuleNotFoundError:
     asnumpy = np.asarray
     MemError = MemoryError
 
-from gates import rz, t, u
-from mps import _sample, _trace_target_unitary
-from utils import distance, get_available_memory, seq2mat
+from trasyn.gates import rz, t, u
+from trasyn.mps import _sample, _trace_target_unitary
+from trasyn.utils import distance, get_available_memory, seq2mat
 
 ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/assets"
 AVAILABLE_GATE_SETS = [
@@ -32,6 +40,10 @@ AVAILABLE_GATE_SETS = [
     for dir_entry in sorted(os.listdir(ASSETS_DIR))
     if os.path.isdir(path := f"{ASSETS_DIR}/{dir_entry}")
 ]
+
+seed = 42
+rng = np.random.default_rng(seed=seed)
+
 
 
 def _num_candidates(
@@ -51,307 +63,192 @@ def _substitute_duplicates(target_sequence: str, lookup_table: dict[str, str]) -
     return target_sequence
 
 
-def synthesize(
-        target_unitary: NDArray | Sequence[float] | float,
-        nonclifford_budget: int | Sequence[int],
+@dataclass
+class SynthesisResult():
+    seqstr: str
+    error: float
+
+
+
+class Sythesiser():
+
+    def __init__(self,
+        max_count: int,
+        total_nonclifford_budget: int,
         error_threshold: float | None = None,
         gate_set: str = "tshxyz",
         num_attempts: int = 5,
-        num_samples: int | None = None,
-        context: tuple[NDArray, NDArray] | None = None,
-        gpu: bool = True,
-        rng: Generator | int | None = None,
-        verbose: bool = False,
-) -> tuple[str, NDArray[np.complex128], float]:
-    """
-    Synthesize a gate sequence to approximate a target unitary.
+        num_samples: int | None = None,):
 
-    Parameters
-    ----------
-    target_unitary : NDArray | Sequence[float] | float
-        The target unitary matrix, three angles for U(theta, phi, lam), or a single Rz angle.
-    nonclifford_budget : int | Sequence[int]
-        The budget for non-Clifford gates (e.g. T gates). Can be a single integer representing
-        the total budget or a sequence of integers specifying the budget for each tensor.
-    error_threshold : float, optional
-        The synthesis error threshold for the method to return once it is met. Note that this is
-        not a hard constraint; the method will return the best solution found after all
-        attempts if the error threshold is not met or it is not specified. Default is None.
-    gate_set : str, optional
-        The target gate set. Gates are listed in the order of cost. Additional gate sets can be
-        added with the unique_matrices_multi_nc.py script. This process will be made more user-friendly
-        in the future. Default is "tshxyz".
-    num_attempts : int, optional
-        The number of sampling attempts per budget configuration. Default is 5.
-    num_samples : int, optional
-        The number of samples to in the sampling process. If None, it is calculated based on
-        available memory. Default is None.
-    context : tuple[NDArray[np.complex128], NDArray[np.complex128]], optional
-        Placeholder for an unimplemented feature.
-    gpu : bool, optional
-        Whether to use GPU for synthesis. Default is True.
-    rng : numpy.random.Generator | int, optional
-        Random number generator or seed for reproducibility. Default is None.
-    verbose : bool, optional
-        Whether to print verbose output during synthesis. Default is False.
+        self.gate_set = gate_set.lower()
+        self.error_threshold = error_threshold
+        self._num_samples = num_samples
+        self.num_attempts = num_attempts
+        self.max_count = max_count
+        self.total_nonclifford_budget = total_nonclifford_budget
+        self.integer_budgets: bool = True
 
-    Returns
-    -------
-    str
-        The synthesized gate sequence as a string. Gates are listed in the matrix product order.
-    NDArray[np.complex128]
-        The matrix corresponding to the synthesized gate sequence.
-    float
-        The error of the synthesized sequence compared to the target unitary.
+    @property
+    def mem_size(self):
+        return get_available_memory(gpu=False)
 
-    Raises
-    ------
-    ValueError
-        If the budget is invalid.
-    NotImplementedError
-        If the gate set does not have associated assets.
-
-    Examples
-    --------
-
-    >>> seq, mat, err = trasyn.synthesize(trasyn.gates.t(), nonclifford_budget=10)
-    >>> print(seq, err)
-    t 0.0
-    >>> seq, mat, err = trasyn.synthesize([0.1, 0.2, 0.3], nonclifford_budget=20) # U(0.1, 0.2, 0.3)
-    >>> print(seq, err, seq.count("t"))
-    yththyththththxthththythththxththxththxththxthsz 0.0018002056473114445 19
-    >>> seq, mat, err = trasyn.synthesize(pi / 16, 30, error_threshold=0.001) # Rz(pi/16)
-    >>> print(seq, err, seq.count("t"))
-    hththththxththththththxthththxththththththxththths 0.0005551347294707683 22
-    """
-    gate_set = gate_set.lower()
-    if gate_set not in AVAILABLE_GATE_SETS:
-        raise NotImplementedError(
-            f"Unimplemented gate set: {gate_set}. "
-            f"Available gate sets: {', '.join(AVAILABLE_GATE_SETS)}. "
-            "(Gates are listed in the order of cost.) "
-            "Additional gate sets can be added with the unique_matrices_multi_nc.py script, "
-            "This process will be made more user-friendly in the future."
-        )
-
-    if isinstance(target_unitary, float):
-        target_unitary = rz(target_unitary)
-    elif len(target_unitary) == 3:
-        target_unitary = u(*target_unitary)
-    else:
-        target_unitary = np.asarray(target_unitary)
-
-    if gpu and cp is np:
-        warnings.warn("cupy not installed, falling back to numpy.")
-        gpu = False
-
-    if num_samples is None or isinstance(nonclifford_budget, int):
-        memsize = get_available_memory(gpu)
-        if verbose:
-            print(f"Available memory: {memsize}")
-
-    MAX_COUNT = int(os.listdir(f"{ASSETS_DIR}/{gate_set}")[0].split("_")[1].split(".")[0])
-    if isinstance(nonclifford_budget, int):
-        tensor_budget = min(11 + int(log(memsize / 2 ** 36, 4)), MAX_COUNT)
-        budgets = [[curr_budget + 1] for curr_budget in range(min(nonclifford_budget, MAX_COUNT))]
-        for curr_budget in range(MAX_COUNT + 1, nonclifford_budget + 1):
-            num_tensors = (curr_budget - 1) // tensor_budget + 1
-            budgets.append([curr_budget // num_tensors] * num_tensors)
-            budgets[-1][0] = curr_budget - sum(budgets[-1][1:])
-    else:
-        if max(nonclifford_budget) > MAX_COUNT:
-            raise ValueError(
-                f"> {MAX_COUNT} non-Clifford gates per tensor for gate set {gate_set} "
-                "is not supported."
-            )
-        budgets = [nonclifford_budget]
-
-    hs_tensor = np.load(f"{ASSETS_DIR}/{gate_set}/tensor_{MAX_COUNT}.npy")
-    t_tensor = np.einsum("ipj,jk->ipk", hs_tensor, t())
-
-    if context is not None:
-        raise NotImplementedError("Context is not implemented yet.")
-
-    if rng is None or isinstance(rng, int):
-        rng = np.random.default_rng(rng)
-
-    if gpu:
-        hs_tensor = cp.asarray(hs_tensor)
-        t_tensor = cp.asarray(t_tensor)
-        target_unitary = cp.asarray(target_unitary)
-
-    best_error, best_string = 2, None
-    for budget, _ in product(budgets, range(num_attempts)):
-        budget = np.asarray(budget)
-        split_low = _num_candidates(budget[:-1] - 2)
-        split_high = _num_candidates(budget[:-1] - 1)
-        mps = [t_tensor[:, split_low[i]: split_high[i]] for i in range(len(budget) - 1)]
-        mps.append(hs_tensor[:, : _num_candidates(budget[-1])])
-        mps = _trace_target_unitary(mps, target_unitary)
-        if num_samples is None:
+    def get_num_samples(self, mps: list[NDArray], budget: list[int]) -> int:
+        if self._num_samples is None:
             if len(mps) == 1:
-                n_samples = 1
+                return 1
             else:
-                n_samples = memsize // (
-                        max(tsr.shape[1] * tsr.shape[2] for tsr in mps[1:]) * 2 ** (4 + len(budget))
+                return self.mem_size // (
+                        max(tsr.shape[1] * tsr.shape[2] for tsr in mps[1:]) * 2 ** (
+                        4 + len(budget))
                 )
+        else:
+            return self._num_samples
+
+    @property
+    def load_dir(self):
+        return f"{ASSETS_DIR}/{self.gate_set}/"
+
+    @property
+    def budget_composition(self) -> list[list[int]]:
+        """ Computes a list of lists where each element yields a possible composition of ints that
+         sum to the index + 1 of this element in the list. Example:
+         [[1], [2], [3], [4], [3,2], [3,3]]
+        Up to max count we can use list with a single entry. Then we need to do combinations.
+         """
+        if self.integer_budgets:
+            return self._get_integer_budgets()
+        else:
+            raise NotImplementedError
+        
+    def _get_integer_budgets(self):
+        budgets = [[curr_budget + 1] for curr_budget in range(min(self.total_nonclifford_budget, self.max_count))]
+        for curr_budget in range(self.max_count + 1, self.total_nonclifford_budget + 1):
+            # compute how many tensors we need. in this for loop the first value is 2
+            num_tensors = (curr_budget - 1) // self.max_count + 1
+            #print(curr_budget, num_tensors)
+            # compute the floor i.e. instead of [5] append [2, 2]
+            budget_decomposition = [curr_budget // num_tensors] * num_tensors
+            #print(budget_decomposition)
+            # eventually we want that the sum of the elements of this list is exactly current budget
+            # in the example above we turned [5] into [2,2] but sum([2,2]) = 4
+            # to correct for this, we pick the fist element of the and replace it with the correct
+            # value which is curr_budget -sum(all but the first element)
+
+            # now it can happen that the first element in the budget_decomposition is > max_count
+            # in this case we need to distribute it to other elements
+            if curr_budget - sum(budget_decomposition[1:]) <= self.max_count:
+                budget_decomposition[0] = curr_budget - sum(budget_decomposition[1:])
+            else:
+                budget_element = curr_budget - sum(budget_decomposition[1:])
+                index = 1
+                while budget_element > self.max_count and index < len(budget_decomposition):
+                    budget_decomposition[index] += 1
+                    index += 1
+                    budget_element -= 1
+
+                if budget_element > self.max_count:
+                    raise NotImplementedError("Other stratgey required")
+                budget_decomposition[0] = budget_element
+
+            #print(budget_decomposition)
+            budgets.append(budget_decomposition)
+
+        #print(budgets)
+        return budgets
+
+    def get_tensor(self, budget: int):
+        """
+        Loads a tensor with a given non-clifford budget. Shape is (2, N, 2) where N is the number
+        of different 2x2 matrices given the fixed non-clifford budget.
+        """
+        return np.load(self.load_dir + f"tensor_{budget:.1f}.npy")
+
+    def get_tensor_as_str(self, budget: float) -> list[str]:
+        """
+        Loads the sequence of gates associated with given budget.
+        """
+        # load sequence strings
+        with open(
+                self.load_dir +
+                f"sequences_{budget:.1f}.json",
+                "r",
+                encoding="utf-8",
+        ) as f:
+            sequences = json.load(f)
+
+        return sequences
+
+    def get_duplicate_as_str(self, budget: float) -> dict[str, str]:
+        """
+        Loads the duplicates of gate sequences associated with given budget.
+        """
+        # load sequence strings
+        with open(
+                self.load_dir +
+                f"duplicates_{budget:.1f}.json",
+                "r",
+                encoding="utf-8",
+        ) as f:
+            duplicates = json.load(f)
+
+        return duplicates
+
+    def get_sequence_of_tensors(self, budget: list[int]) -> list[NDArray]:
+        """ Generate a list of corresponding tensors according to budget. """
+        return [self.get_tensor(b) for b in budget]
+
+    def get_sequence_of_tensors_as_str(self, budget: Iterable[int]) -> list[list[str]]:
+        return [self.get_tensor_as_str(b) for b in budget]
+
+    def get_duplicates(self, budget: list[int]) -> Iterable[dict[str, str]]:
+        return [self.get_duplicate_as_str(b) for b in budget]
+
+    def sample_and_synthesize(self, target_unitary: NDArray, verbose: bool) -> SynthesisResult:
+        fidelity = 0
+        bitstring = None
+        result = SynthesisResult(error=2, seqstr="")
+        for budget, _ in product(self.budget_composition, range(self.num_attempts)):
+            #print(budget)
+            mps = self.get_sequence_of_tensors(budget)
+            mps = _trace_target_unitary(mps, target_unitary)
+            n_samples = self.get_num_samples(mps, budget)
             while n_samples:
                 try:
                     bitstring, fidelity = _sample(mps, n_samples, rng=rng)
                     break
                 except MemError:
                     n_samples = int(n_samples * 0.9)
-        else:
-            bitstring, fidelity = _sample(mps, num_samples, rng=rng)
-        if context is None:
+
             fidelity /= 2
-        fidelity = min(fidelity, 1)
-        error = np.sqrt(1 - fidelity ** 2)
-        if verbose:
-            print(f"Budget: {budget}, Num samples: {n_samples}")
-            print(f"Error:{error}, Fidelity: {fidelity}")
-        if error < best_error - 1e-5:
-            best_error = error
-            best_string = bitstring
-            best_string[:-1] += split_low
-        if error_threshold is not None and error <= error_threshold:
-            break
-    if error_threshold is not None and best_error > error_threshold:
-        warnings.warn(
-            f"Error threshold {error_threshold} is not reached "
-            f"by the lowest error found: {best_error}."
-        )
+            # TODO: this makes no sense. Fidelity should not be > 1
+            fidelity = min(fidelity, 1)
+            error = np.sqrt(1 - fidelity ** 2)
+            if verbose:
+                print(f"Budget: {budget}, Num samples: {n_samples}")
+                print(f"Error:{error}, Fidelity: {fidelity}")
+            if error < result.error:
+                result = SynthesisResult(error=error, seqstr=self.get_sequence_str(bitstring, budget))
+            if self.error_threshold is not None and error <= self.error_threshold:
+                break
 
-    with open(
-            f"{ASSETS_DIR}/{gate_set}/sequences_{MAX_COUNT}.json",
-            "r",
-            encoding="utf-8",
-    ) as f:
-        sequences = json.load(f)
-    with open(
-            f"{ASSETS_DIR}/{gate_set}/duplicates_{MAX_COUNT}.json",
-            "r",
-            encoding="utf-8",
-    ) as f:
-        duplicates = json.load(f)
+        if self.error_threshold is not None and result.error > self.error_threshold:
+            warnings.warn(
+                f"Error threshold {self.error_threshold} is not reached "
+                f"by the lowest error found: {result.error}."
+            )
 
-    seqstr = _substitute_duplicates(
-        "t".join(_substitute_duplicates(sequences[int(j)], duplicates) for j in best_string),
-        duplicates,
-    )
-    mat = seq2mat(seqstr)
-    return seqstr, mat, distance(mat, asnumpy(target_unitary))
+        return result
 
+    def get_sequence_str(self, indices: Iterable[int], budget: Iterable[int]) -> str:
+        """ Get the sequences of gates as str associated with the budget and the indices """
+        tensors_as_string = self.get_sequence_of_tensors_as_str(budget)
+        duplicates = self.get_duplicates(budget)
+        seqstr = []
+        for index, tensor, dupl in zip(indices, tensors_as_string, duplicates):
+            target_str = _substitute_duplicates(tensor[index], dupl)
+            seqstr.append(target_str)
 
-try:
-    from qiskit import QuantumCircuit, transpile
-    from qiskit.circuit.library import HGate, SGate, TGate, XGate, YGate, ZGate
-    from qiskit.transpiler import PassManager
-    from qiskit.transpiler.passes import Optimize1qGatesSimpleCommutation
-
-    QISKIT_GATES = {
-        "h": HGate,
-        "s": SGate,
-        "t": TGate,
-        "x": XGate,
-        "y": YGate,
-        "z": ZGate,
-    }
-    CONTINUOUS_GATES = ["rx", "ry", "rz", "u", "u1", "u2", "u3"]
-    TENSOR_1T = np.load(
-        *[
-            f"{ASSETS_DIR}/tshxyz/{dir_entry}"
-            for dir_entry in os.listdir(f"{ASSETS_DIR}/tshxyz")
-            if dir_entry.endswith(".npy")
-        ]
-    )[:, : _num_candidates(1)].transpose(1, 0, 2)
-
-
-    def synthesize_qiskit_circuit(
-            circuit: QuantumCircuit, u3_transpile: bool = True, **trasyn_options
-    ) -> QuantumCircuit:
-        """
-        Synthesize a Qiskit circuit to a fault-tolerant gate set.
-
-        Parameters
-        ----------
-        circuit : qiskit.QuantumCircuit
-            The input quantum circuit to be synthesized.
-        u3_transpile : bool, optional
-            Whether to explore transpilations that can reduce the number of rotations in the
-            circuit. Default is True.
-        trasyn_options : dict
-            Arguments for `synthesize()`.
-
-        Returns
-        -------
-        qiskit.QuantumCircuit
-            The synthesized quantum circuit in the specified fault-tolerant gate set.
-
-        Raises
-        ------
-        ValueError
-            If an unknown gate is encountered in the circuit.
-
-        Notes
-        -----
-        This function removes final measurements from the circuit.
-        """
-        circuit.remove_final_measurements()
-        if u3_transpile:
-            best_circuit, best_num_rotations = None, np.inf
-            for opt_lvl in range(4):
-                for circ in [
-                    circuit,
-                    PassManager([Optimize1qGatesSimpleCommutation(run_to_completion=True)]).run(
-                        transpile(
-                            circuit,
-                            basis_gates=["cx", "h", "rz", "rx"],
-                            optimization_level=opt_lvl,
-                        )
-                    ),
-                ]:
-                    circ = transpile(circ, basis_gates=["cx", "u3"], optimization_level=opt_lvl)
-                    num_rotations = 0
-                    for op, qbts, _ in circ:
-                        if op.name in CONTINUOUS_GATES:
-                            matrix = op.to_matrix()
-                            duplicate = np.argwhere(
-                                np.isclose(
-                                    np.abs(
-                                        np.dot(TENSOR_1T[:, 0], matrix[0].conj())
-                                        + np.dot(TENSOR_1T[:, 1], matrix[1].conj())
-                                    ),  # calculate trace without matrix multiplication
-                                    2,
-                                )
-                            )
-                            if len(duplicate) == 0:
-                                num_rotations += 1
-                    if num_rotations < best_num_rotations:
-                        best_num_rotations = num_rotations
-                        best_circuit = circ
-            circuit = best_circuit
-
-        ft_qc = QuantumCircuit(*circuit.qregs, *circuit.cregs)
-        synthesized_gates = {}
-        for op, qbts, cbts in circuit:
-            if op.name in CONTINUOUS_GATES:
-                if (key := tuple(op.params)) in synthesized_gates:
-                    seq = synthesized_gates[key]
-                else:
-                    seq = synthesize(op.to_matrix(), **trasyn_options)[0]
-                    synthesized_gates[key] = seq
-                for gate in seq[::-1]:
-                    try:
-                        ft_qc.append(QISKIT_GATES[gate](), qbts)
-                    except KeyError as err:
-                        raise ValueError(f"Unknown gate: {gate}") from err
-            else:
-                ft_qc.append(op, qbts, cbts)
-        return ft_qc
-
-except ImportError:
-    pass
+        return "".join(seqstr)
 
 
 def random_unitary_2x2():
@@ -368,35 +265,163 @@ def random_unitary_2x2():
     return Q
 
 
-def benchmark_on_random_unitaries(n_unitaries_per_budget: int, nc_budget_lower: int,
-                                  nc_budget_upper: int):
+def benchmark_on_random_unitaries(n_unitaries_per_budget: int,
+                                  nc_budget_lower: int,
+                                  nc_budget_upper: int,
+                                    gate_set: str,
+                                  save_dir: str = "./benchmark_results"):
+    # Ensure save directory exists
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+
     error_data_t = []
     error_data_sqrt_t = []
-    for nc_budget in range(nc_budget_lower, nc_budget_upper):
-        avg_err_t = 0
-        avg_err_sqrt_t = 0
-        for _ in range(n_unitaries_per_budget):
+
+    std_t = []
+    std_sqrt_t = []
+
+    budgets = list(range(nc_budget_lower, nc_budget_upper))
+
+    for nc_budget in tqdm(budgets):
+
+        syn_sqrtT = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
+                               gate_set=gate_set)
+        syn_T = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
+                           gate_set="tshxyz_tequiv_short")
+
+        avg_t = []
+        avg_sqrt_t = []
+
+        for i in range(n_unitaries_per_budget):
             target_unitary = random_unitary_2x2()
-            _, _, err_t = synthesize(target_unitary=target_unitary, nonclifford_budget=nc_budget,
-                                               gate_set="tshxyz_short")
-            _, _, err_sqrt_t = synthesize(target_unitary=target_unitary, nonclifford_budget=nc_budget,
-                                               gate_set="tqshxyz_short")
+            sqrtT_result = syn_sqrtT.sample_and_synthesize(target_unitary, verbose=False)
+            T_result = syn_T.sample_and_synthesize(target_unitary=target_unitary, verbose=False)
 
-            avg_err_t += err_t
-            avg_err_sqrt_t +=err_sqrt_t
-        avg_err_t /= n_unitaries_per_budget
-        avg_err_sqrt_t /= n_unitaries_per_budget
+            avg_t.append(T_result.error)
+            avg_sqrt_t.append(sqrtT_result.error)
 
-        error_data_t.append(avg_err_t)
-        error_data_sqrt_t.append(avg_err_sqrt_t)
+        error_data_t.append(np.mean(avg_t))
+        error_data_sqrt_t.append(np.mean(avg_sqrt_t))
+        
+        std_t.append(np.std(avg_t))
+        std_sqrt_t.append(np.std(avg_sqrt_t))
 
-    plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_t, label="T")
-    plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_sqrt_t, label="sqrt(T) + T")
-    plt.ylabel("avg synthesis error")
-    plt.xlabel("non-clifford budget")
-    plt.legend()
-    plt.show()
+        # Save per-budget checkpoint
+        budget_data = {
+            'budget': nc_budget,
+            'avg_error_t': avg_t,
+            'std_t': std_t,
+            'avg_error_sqrt_t': avg_sqrt_t,
+            'std_sqrt_t': std_sqrt_t,
+            'error_data_t': error_data_t,
+            'error_data_sqrt_t': error_data_sqrt_t,
+            'budgets': budgets
+        }
+        pickle.dump(budget_data,
+                    open(f"{save_dir}/budget_{gate_set}_results.pkl", 'wb'))
+
+    # Save final complete results
+    final_data = {
+        'budgets': budgets,
+        'error_data_t': error_data_t,
+        'std_t': std_t,
+        'error_data_sqrt_t': error_data_sqrt_t,
+        'std_sqrt_t': std_sqrt_t,
+        'n_unitaries_per_budget': n_unitaries_per_budget,
+        'config': {
+            'nc_budget_lower': nc_budget_lower,
+            'nc_budget_upper': nc_budget_upper
+        }
+    }
+    pickle.dump(final_data, open(f"{save_dir}/{gate_set}_results.pkl", 'wb'))
+
+    # Also save as numpy arrays for easy loading
+    np.save(f"{save_dir}/budgets.npy", np.array(budgets))
+    np.save(f"{save_dir}/error_data_t.npy", np.array(error_data_t))
+    np.save(f"{save_dir}/error_data_sqrt_t.npy", np.array(error_data_sqrt_t))
+
+    # Plot
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(budgets, error_data_t, 'o-', label="T", linewidth=2, markersize=6)
+    # plt.plot(budgets, error_data_sqrt_t, 's-', label="sqrt(T) + T", linewidth=2, markersize=6)
+    # plt.ylabel("avg synthesis error")
+    # plt.xlabel("non-clifford budget")
+    # plt.legend()
+    # plt.grid(True, alpha=0.3)
+    # plt.tight_layout()
+    # plt.savefig(f"{save_dir}/benchmark_plot.pdf", bbox_inches='tight')
+    #plt.show()
+
+    return final_data
+
+# def benchmark_on_random_unitaries(n_unitaries_per_budget: int, 
+#                                   nc_budget_lower: int,
+#                                   nc_budget_upper: int,
+#                                   save_dir: str = "./benchmark_results"):
+#     error_data_t = []
+#     error_data_sqrt_t = []
+#     for nc_budget in range(nc_budget_lower, nc_budget_upper):
+#         syn_sqrtT = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
+#                    gate_set="tqshxyz_tequiv_short_cost_3")
+#         syn_T = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
+#                    gate_set="tshxyz_tequiv_short")
+# 
+#         avg_err_t = 0
+#         avg_err_sqrt_t = 0
+#         for _ in range(n_unitaries_per_budget):
+#             target_unitary = random_unitary_2x2()
+#             sqrtT_result = syn_sqrtT.sample_and_synthesize(target_unitary, verbose=True)
+#             T_result =  syn_T.sample_and_synthesize(target_unitary=target_unitary, verbose=True)
+# 
+#             avg_err_t += T_result.error
+#             avg_err_sqrt_t += sqrtT_result.error
+#         avg_err_t /= n_unitaries_per_budget
+#         avg_err_sqrt_t /= n_unitaries_per_budget
+# 
+#         error_data_t.append(avg_err_t)
+#         error_data_sqrt_t.append(avg_err_sqrt_t)
+#         
+# 
+# 
+#     plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_t, label="T")
+#     plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_sqrt_t, label="sqrt(T) + T")
+#     plt.ylabel("avg synthesis error")
+#     plt.xlabel("non-clifford budget")
+#     plt.legend()
+#     plt.show()
 
 
 if __name__ == "__main__":
-    benchmark_on_random_unitaries(n_unitaries_per_budget=50, nc_budget_lower=3, nc_budget_upper=7)
+    gate_set_cost_3 = "tqshxyz_tequiv_short_cost_3"
+    gate_set = "tqshxyz_tequiv_short"
+    benchmark_on_random_unitaries(n_unitaries_per_budget=500, nc_budget_lower=2, nc_budget_upper=12, gate_set=gate_set_cost_3, save_dir="./benchmark_results_500")
+    benchmark_on_random_unitaries(n_unitaries_per_budget=500, nc_budget_lower=2, nc_budget_upper=12,
+                                  gate_set=gate_set,  save_dir="./benchmark_results_500")
+    
+    with open(f"./benchmark_results/{gate_set_cost_3}_results.pkl", "rb") as file:
+        data = pickle.load(file)
+    
+    print(data)
+    lower = data["config"]["nc_budget_lower"]
+    upper = data["config"]["nc_budget_upper"]
+    plt.errorbar(np.arange(lower, upper) ,data["error_data_sqrt_t"], yerr=data["std_sqrt_t"], label="T + sqrtT (cost 3)")
+
+
+    with open(f"./benchmark_results/{gate_set}_results.pkl", "rb") as file:
+        data = pickle.load(file)
+
+    lower = data["config"]["nc_budget_lower"]
+    upper = data["config"]["nc_budget_upper"]
+    plt.errorbar(np.arange(lower, upper), data["error_data_sqrt_t"], yerr=data["std_sqrt_t"], label="T + sqrtT (cost 2)")
+    plt.errorbar(np.arange(lower, upper), data["error_data_t"], yerr=data["std_t"], label="T")
+    plt.ylabel("avg synthesis error")
+    plt.xlabel("non-clifford budget")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+    
+    # syn = Sythesiser([0.1, 0.2, 0.3], 4, 6, gate_set="tqshxyz")
+    # result = syn.sample_and_synthesize(verbose=True)
+    #
+    # print(result.error)
+    # print(result.seqstr)
