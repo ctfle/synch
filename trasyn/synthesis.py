@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 
 import numpy as np
-from hypothesis.internal.conjecture.shrinking import Collection
+# from hypothesis.internal.conjecture.shrinking import Collection
 from numpy.random import Generator
 from numpy.typing import NDArray
 from matplotlib import pyplot as plt

@@ -22,7 +22,7 @@ clifford_gates = nontrivial_cliffords + trivial_cliffords
 nonclifford_gate = "t"
 nonclifford_gates = "tq"
 ASSETS_DIR = (
-    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_short/"
+    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_medium/"
 )
 
 if __name__ == "__main__":
@@ -34,7 +34,7 @@ if __name__ == "__main__":
         matrices = np.eye(2, dtype=complex).reshape(1, 2, 2)
         sequences = [""]
         duplicates = {}
-        for length in range(1, 5):
+        for length in range(1, 8):
             print(f"{length = }")
             for seq in product(clifford_gates, repeat=length):
                 seqstr = _substitute_duplicates("".join(seq), duplicates)
