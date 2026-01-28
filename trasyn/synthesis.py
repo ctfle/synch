@@ -334,60 +334,12 @@ def benchmark_on_random_unitaries(n_unitaries_per_budget: int,
     }
     pickle.dump(final_data, open(f"{save_dir}/{gate_set}_results.pkl", 'wb'))
 
-    # Also save as numpy arrays for easy loading
     np.save(f"{save_dir}/budgets.npy", np.array(budgets))
     np.save(f"{save_dir}/error_data_t.npy", np.array(error_data_t))
     np.save(f"{save_dir}/error_data_sqrt_t.npy", np.array(error_data_sqrt_t))
 
-    # Plot
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(budgets, error_data_t, 'o-', label="T", linewidth=2, markersize=6)
-    # plt.plot(budgets, error_data_sqrt_t, 's-', label="sqrt(T) + T", linewidth=2, markersize=6)
-    # plt.ylabel("avg synthesis error")
-    # plt.xlabel("non-clifford budget")
-    # plt.legend()
-    # plt.grid(True, alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig(f"{save_dir}/benchmark_plot.pdf", bbox_inches='tight')
-    #plt.show()
-
     return final_data
 
-# def benchmark_on_random_unitaries(n_unitaries_per_budget: int, 
-#                                   nc_budget_lower: int,
-#                                   nc_budget_upper: int,
-#                                   save_dir: str = "./benchmark_results"):
-#     error_data_t = []
-#     error_data_sqrt_t = []
-#     for nc_budget in range(nc_budget_lower, nc_budget_upper):
-#         syn_sqrtT = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
-#                    gate_set="tqshxyz_tequiv_short_cost_3")
-#         syn_T = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
-#                    gate_set="tshxyz_tequiv_short")
-# 
-#         avg_err_t = 0
-#         avg_err_sqrt_t = 0
-#         for _ in range(n_unitaries_per_budget):
-#             target_unitary = random_unitary_2x2()
-#             sqrtT_result = syn_sqrtT.sample_and_synthesize(target_unitary, verbose=True)
-#             T_result =  syn_T.sample_and_synthesize(target_unitary=target_unitary, verbose=True)
-# 
-#             avg_err_t += T_result.error
-#             avg_err_sqrt_t += sqrtT_result.error
-#         avg_err_t /= n_unitaries_per_budget
-#         avg_err_sqrt_t /= n_unitaries_per_budget
-# 
-#         error_data_t.append(avg_err_t)
-#         error_data_sqrt_t.append(avg_err_sqrt_t)
-#         
-# 
-# 
-#     plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_t, label="T")
-#     plt.plot(list(range(nc_budget_lower, nc_budget_upper)), error_data_sqrt_t, label="sqrt(T) + T")
-#     plt.ylabel("avg synthesis error")
-#     plt.xlabel("non-clifford budget")
-#     plt.legend()
-#     plt.show()
 
 
 if __name__ == "__main__":
@@ -397,31 +349,3 @@ if __name__ == "__main__":
     benchmark_on_random_unitaries(n_unitaries_per_budget=500, nc_budget_lower=2, nc_budget_upper=12,
                                   gate_set=gate_set,  save_dir="./benchmark_results_500")
     
-    with open(f"./benchmark_results/{gate_set_cost_3}_results.pkl", "rb") as file:
-        data = pickle.load(file)
-    
-    print(data)
-    lower = data["config"]["nc_budget_lower"]
-    upper = data["config"]["nc_budget_upper"]
-    plt.errorbar(np.arange(lower, upper) ,data["error_data_sqrt_t"], yerr=data["std_sqrt_t"], label="T + sqrtT (cost 3)")
-
-
-    with open(f"./benchmark_results/{gate_set}_results.pkl", "rb") as file:
-        data = pickle.load(file)
-
-    lower = data["config"]["nc_budget_lower"]
-    upper = data["config"]["nc_budget_upper"]
-    plt.errorbar(np.arange(lower, upper), data["error_data_sqrt_t"], yerr=data["std_sqrt_t"], label="T + sqrtT (cost 2)")
-    plt.errorbar(np.arange(lower, upper), data["error_data_t"], yerr=data["std_t"], label="T")
-    plt.ylabel("avg synthesis error")
-    plt.xlabel("non-clifford budget")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.show()
-    
-    # syn = Sythesiser([0.1, 0.2, 0.3], 4, 6, gate_set="tqshxyz")
-    # result = syn.sample_and_synthesize(verbose=True)
-    #
-    # print(result.error)
-    # print(result.seqstr)
