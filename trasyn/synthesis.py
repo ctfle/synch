@@ -92,7 +92,7 @@ class BudgetPartitioner:
     def _verify_costs(self):
         assert np.allclose(self.min_gate_cost, 1), "min cost should be set to 1."
         for cost in self.costs.values():
-            assert cost.is_integer() or (cost - 0.5).is_integer(), (
+            assert float(cost).is_integer() or (cost - 0.5).is_integer(), (
                 "Costs must be integer or multiple of 1/2."
             )
 
@@ -115,7 +115,7 @@ class BudgetPartitioner:
 
     @property
     def all_costs_integer(self) -> bool:
-        return all([i.is_integer() for i in self.costs.values()])
+        return all([float(i).is_integer() for i in self.costs.values()])
 
     def partition(self) -> list[list[float]] | list[list[int]]:
         if self.all_costs_integer:
