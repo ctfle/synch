@@ -50,15 +50,22 @@ def run_benchmark(args):
 
 
 if __name__ == "__main__":
-    n_unitaries = 100
-    max_budget = 12
+    n_unitaries = 1000
+    max_budget = 15
     save_dir = f"./benchmark_results_{n_unitaries}"
     gate_set_cost_3 = "tqshxyz_tequiv_medium_cost_3"  # "tqshxyz_tequiv_short_cost_3"
-    gate_set_cost_2 = "tqshxyz_tequiv_medium"  # "tqshxyz_tequiv_short"
+    gate_set_cost_2 = "tqshxyz_tequiv_medium_cost_2"  # "tqshxyz_tequiv_short"
     gate_set_cost_25 = "tqshxyz_tequiv_medium_cost_2.5"
     gate_set_t = "tshxyz_tequiv_medium"
 
     tasks = [
+        dict(
+            n_unitaries_per_budget=n_unitaries,
+            budgets=np.arange(2, max_budget),
+            load_dir="../assets/" + gate_set_t,
+            save_dir=save_dir + "/" + gate_set_t,
+            costs={"T": 1.0},
+        ),
         dict(
             n_unitaries_per_budget=n_unitaries,
             budgets=np.arange(2, max_budget, 0.5),
@@ -69,18 +76,16 @@ if __name__ == "__main__":
         # dict(
         #     n_unitaries_per_budget=n_unitaries,
         #     budgets=np.arange(2, max_budget),
-        #     gate_set=gate_set_t,
-        #     save_dir=save_dir,
-        #     costs={"T": 1.0},
-        # ),
-        # dict(
-        #     n_unitaries_per_budget=n_unitaries,
-        #     budgets=np.arange(2, max_budget),
         #     gate_set=gate_set_cost_2,
         #     save_dir=save_dir,
         #     costs={"T": 1.0, "sqrtT": 2.0},
         # ),
     ]
-
-    with Pool(processes=3) as pool:  # or processes=None for "cpu_count()"
-        pool.map(run_benchmark, tasks)
+    
+    
+    # run in parallel
+    # with Pool(processes=3) as pool:
+    #     pool.map(run_benchmark, tasks)
+    
+    for task in tasks:
+        run_benchmark(task)        
