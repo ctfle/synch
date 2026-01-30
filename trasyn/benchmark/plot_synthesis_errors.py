@@ -1,14 +1,13 @@
 import pickle
 import matplotlib.pyplot as plt
-from trasyn.results.utils import get_mean_and_std, fit_and_plot, extract_budget_files
+from trasyn.benchmark.utils import get_mean_and_std, fit_and_plot, extract_budget_files
 
 
-dir = "./benchmark_results_100"
+dir = "./benchmark_results_1000"
 colors = ["red", "blue", "green"]
-labels = ["T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)", "T"]
+labels = ["T", "T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)"]
 gate_sets_dir = [
-    "tqshxyz_tequiv_medium_cost_2.5"
-]  # "tqshxyz_tequiv_medium",  "tshxyz_tequiv_medium"
+"tshxyz_tequiv_medium", ] # "tqshxyz_tequiv_medium_cost2", "tqshxyz_tequiv_medium_cost_2.5" ]
 
 
 for gs, color, label in zip(gate_sets_dir, colors, labels):

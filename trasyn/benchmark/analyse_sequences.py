@@ -1,7 +1,7 @@
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
-from trasyn.results.utils import (
+from trasyn.benchmark.utils import (
     get_mean_and_std,
     fit_and_plot,
     analyse_sequence,
