@@ -87,6 +87,34 @@ def find_json_to_read(
             yield path.split("/")[-1][:-5].lower().replace("_", " "), data
 
 
+def can_partition_with_multiples(target: float, numbers: list[float], tol=1e-8) -> bool:
+    """
+    Check if target can be made using any combination of numbers (multiples allowed).
+
+    Examples:
+    >>> can_partition_with_multiples(8.5, [4.0, 2.5, 1.0])  # True: 4.0 + 4.0 + 0.5
+    >>> can_partition_with_multiples(7.5, [3.0, 2.5])       # True: 2.5 + 2.5 + 2.5
+    """
+    # Scale to integers (multiply by 2 for half-integers)
+    target_scaled = round(target * 2)
+    numbers_scaled = [round(n * 2) for n in numbers if abs(n) > tol]
+
+    target_int = int(target_scaled)
+
+    # dp[s] = True if sum s can be made
+    dp = [False] * (target_int + 1)
+    dp[0] = True  # sum 0 always possible
+
+    # Try each number for each sum
+    for s in range(target_int + 1):
+        if dp[s]:
+            for num in numbers_scaled:
+                if s + num <= target_int:
+                    dp[s + num] = True
+
+    return dp[target_int]
+
+
 def get_available_memory(gpu: bool = False) -> int:
     if gpu:
         memsize, unit = (

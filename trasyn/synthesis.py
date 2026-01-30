@@ -2,11 +2,13 @@ import json
 import os
 import warnings
 from dataclasses import dataclass
+from functools import cached_property
 from itertools import product
 from math import log
+from multiprocessing import Pool
 from typing import Literal, Sequence, Iterable
 from tqdm import tqdm
-
+from trasyn.utils import can_partition_with_multiples
 
 import numpy as np
 # from hypothesis.internal.conjecture.shrinking import Collection
@@ -14,6 +16,8 @@ from numpy.random import Generator
 from numpy.typing import NDArray
 from matplotlib import pyplot as plt
 from sympy.physics.quantum.density import fidelity
+
+
 
 import os
 import pickle
@@ -70,11 +74,135 @@ class SynthesisResult():
 
 
 
+class BudgetPartitioner():
+
+    """ Not sure about the factor of 2 """
+
+    def __init__(self, costs: dict[str, float],
+                 total_non_clifford_budget: float,
+                 max_partition_value: float):
+        self.costs = costs
+        self.total_non_clifford_budget = total_non_clifford_budget
+        self.max_partition_value = max_partition_value
+        self._verify_costs()
+        self._verify_max_partition_value()
+
+    def _verify_costs(self):
+        assert np.allclose(self.min_gate_cost, 1), "min cost should be set to 1."
+        for cost in self.costs.values():
+            assert cost.is_integer() or (cost - 0.5).is_integer(), "Costs must be integer or multiple of 1/2."
+
+    def _verify_max_partition_value(self):
+        assert self.max_partition_value >= self.max_gate_cost * 2, f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
+
+    @property
+    def cost_values(self) -> list[float]:
+        return list(self.costs.values())
+
+    @cached_property
+    def max_gate_cost(self) -> float:
+        return max([cost for cost in self.costs.values()])
+
+    @cached_property
+    def min_gate_cost(self) -> float:
+        return min([cost for cost in self.costs.values()])
+
+    @property
+    def all_costs_integer(self) -> bool:
+        return all([i.is_integer() for i in self.costs.values()])
+
+    def partition(self) -> list[list[float]] | list[list[int]]:
+        if self.all_costs_integer:
+            budgets = [self._get_integer_partition(i)
+                       for i in range(int(self.total_non_clifford_budget + 1))]
+        else:
+            budgets = []
+            for i in np.arange(0, self.total_non_clifford_budget + 0.5, 0.5):
+                partition = self._get_non_integer_partition(i)
+                if len(partition) > 0:
+                    budgets.append(partition)
+
+        return budgets
+
+    def _get_integer_partition(self, input: int) -> list[int]:
+        # if the total non_clifford budget is int we can call the normal partitioner
+        partition = []
+        # partition using as many 2 * max_gate_cost as possible
+        if input < self.max_partition_value:
+            partition = [input]
+        else:
+            partition = self._complete_partitioning(input)
+        return partition
+
+    def _get_non_integer_partition(self, input: float):
+        # iterate in steps of 0.5
+        # for each value, check if
+        partition = []
+        if input < self.max_partition_value:
+            if can_partition_with_multiples(input, self.cost_values):
+                partition = [input]
+        else:
+            if input.is_integer():
+                # even number of .5 numbers must be used
+                # split of max_cost *2
+                partition = self._complete_partitioning(input)
+            else:
+                # odd number of .5 numbers must be used
+                # split off max_cost
+                partition = [self.max_gate_cost]
+                partition.extend(self._complete_partitioning(input - self.max_gate_cost))
+
+        return partition
+
+    def _complete_partitioning(self, remainder: float):
+        partition = []
+        while remainder > 2 * self.max_gate_cost:
+            partition.append(2 * self.max_gate_cost)
+            remainder -= 2 * self.max_gate_cost
+
+        partition.append(remainder)
+        return partition
+
+    def _original_partitioning(self):
+        budgets = [[curr_budget + 1] for curr_budget in range(int(min(self.total_non_clifford_budget, self.max_partition_value)))]
+        for curr_budget in range(int(self.max_partition_value + 1), int(self.total_non_clifford_budget + 1)):
+            # compute how many tensors we need. in this for loop the first value is 2
+            num_tensors =int( (curr_budget - 1) // self.max_partition_value + 1 )
+            #print(curr_budget, num_tensors)
+            # compute the floor i.e. instead of [5] append [2, 2]
+            budget_decomposition = [curr_budget // num_tensors] * num_tensors
+            #print(budget_decomposition)
+            # eventually we want that the sum of the elements of this list is exactly current budget
+            # in the example above we turned [5] into [2,2] but sum([2,2]) = 4
+            # to correct for this, we pick the fist element of the and replace it with the correct
+            # value which is curr_budget -sum(all but the first element)
+
+            # now it can happen that the first element in the budget_decomposition is > max_count
+            # in this case we need to distribute it to other elements
+            if curr_budget - sum(budget_decomposition[1:]) <= self.max_partition_value:
+                budget_decomposition[0] = curr_budget - sum(budget_decomposition[1:])
+            else:
+                budget_element = curr_budget - sum(budget_decomposition[1:])
+                index = 1
+                while budget_element > self.max_partition_value and index < len(budget_decomposition):
+                    budget_decomposition[index] += 1
+                    index += 1
+                    budget_element -= 1
+
+                if budget_element > self.max_partition_value:
+                    raise NotImplementedError("Other stratgey required")
+                budget_decomposition[0] = budget_element
+
+            budgets.append(budget_decomposition)
+
+        return budgets
+
+
+
 class Sythesiser():
 
     def __init__(self,
-        max_count: int,
-        total_nonclifford_budget: int,
+        partitioner: BudgetPartitioner,
         error_threshold: float | None = None,
         gate_set: str = "tshxyz",
         num_attempts: int = 5,
@@ -84,8 +212,7 @@ class Sythesiser():
         self.error_threshold = error_threshold
         self._num_samples = num_samples
         self.num_attempts = num_attempts
-        self.max_count = max_count
-        self.total_nonclifford_budget = total_nonclifford_budget
+        self.budget_partitioner = partitioner
         self.integer_budgets: bool = True
 
     @property
@@ -109,52 +236,13 @@ class Sythesiser():
         return f"{ASSETS_DIR}/{self.gate_set}/"
 
     @property
-    def budget_composition(self) -> list[list[int]]:
+    def budget_composition(self) -> list[list[int]] | list[list[float]]:
         """ Computes a list of lists where each element yields a possible composition of ints that
          sum to the index + 1 of this element in the list. Example:
          [[1], [2], [3], [4], [3,2], [3,3]]
         Up to max count we can use list with a single entry. Then we need to do combinations.
          """
-        if self.integer_budgets:
-            return self._get_integer_budgets()
-        else:
-            raise NotImplementedError
-        
-    def _get_integer_budgets(self):
-        budgets = [[curr_budget + 1] for curr_budget in range(min(self.total_nonclifford_budget, self.max_count))]
-        for curr_budget in range(self.max_count + 1, self.total_nonclifford_budget + 1):
-            # compute how many tensors we need. in this for loop the first value is 2
-            num_tensors = (curr_budget - 1) // self.max_count + 1
-            #print(curr_budget, num_tensors)
-            # compute the floor i.e. instead of [5] append [2, 2]
-            budget_decomposition = [curr_budget // num_tensors] * num_tensors
-            #print(budget_decomposition)
-            # eventually we want that the sum of the elements of this list is exactly current budget
-            # in the example above we turned [5] into [2,2] but sum([2,2]) = 4
-            # to correct for this, we pick the fist element of the and replace it with the correct
-            # value which is curr_budget -sum(all but the first element)
-
-            # now it can happen that the first element in the budget_decomposition is > max_count
-            # in this case we need to distribute it to other elements
-            if curr_budget - sum(budget_decomposition[1:]) <= self.max_count:
-                budget_decomposition[0] = curr_budget - sum(budget_decomposition[1:])
-            else:
-                budget_element = curr_budget - sum(budget_decomposition[1:])
-                index = 1
-                while budget_element > self.max_count and index < len(budget_decomposition):
-                    budget_decomposition[index] += 1
-                    index += 1
-                    budget_element -= 1
-
-                if budget_element > self.max_count:
-                    raise NotImplementedError("Other stratgey required")
-                budget_decomposition[0] = budget_element
-
-            #print(budget_decomposition)
-            budgets.append(budget_decomposition)
-
-        #print(budgets)
-        return budgets
+        return self.budget_partitioner.partition()
 
     def get_tensor(self, budget: int):
         """
@@ -266,86 +354,92 @@ def random_unitary_2x2():
 
 
 def benchmark_on_random_unitaries(n_unitaries_per_budget: int,
-                                  nc_budget_lower: int,
-                                  nc_budget_upper: int,
-                                    gate_set: str,
-                                  save_dir: str = "./benchmark_results"):
+                                budgets: list[float] | list[int],
+                                gate_set: str,
+                                costs: dict[str, float],
+                                save_dir: str = "./benchmark_results"):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    error_data_t = []
-    error_data_sqrt_t = []
-
-    std_t = []
-    std_sqrt_t = []
-
-    budgets = list(range(nc_budget_lower, nc_budget_upper))
-
+    error_data = {}
+    seqstr_data = {}
     for nc_budget in tqdm(budgets):
-
-        syn_sqrtT = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
+        partitioner = BudgetPartitioner(max_partition_value=5,
+                                        total_non_clifford_budget=nc_budget,
+                                        costs=costs)
+        syn = Sythesiser(partitioner=partitioner,
                                gate_set=gate_set)
-        syn_T = Sythesiser(max_count=4, total_nonclifford_budget=nc_budget,
-                           gate_set="tshxyz_tequiv_short")
 
-        avg_t = []
-        avg_sqrt_t = []
-
+        errors = []
+        seqs = []
         for i in range(n_unitaries_per_budget):
             target_unitary = random_unitary_2x2()
-            sqrtT_result = syn_sqrtT.sample_and_synthesize(target_unitary, verbose=False)
-            T_result = syn_T.sample_and_synthesize(target_unitary=target_unitary, verbose=False)
+            result = syn.sample_and_synthesize(target_unitary, verbose=False)
+            errors.append(result.error)
+            seqs.append(result.seqstr)
 
-            avg_t.append(T_result.error)
-            avg_sqrt_t.append(sqrtT_result.error)
-
-        error_data_t.append(np.mean(avg_t))
-        error_data_sqrt_t.append(np.mean(avg_sqrt_t))
-        
-        std_t.append(np.std(avg_t))
-        std_sqrt_t.append(np.std(avg_sqrt_t))
-
+        error_data[nc_budget] = errors
+        seqstr_data[nc_budget] = seqs
         # Save per-budget checkpoint
         budget_data = {
-            'budget': nc_budget,
-            'avg_error_t': avg_t,
-            'std_t': std_t,
-            'avg_error_sqrt_t': avg_sqrt_t,
-            'std_sqrt_t': std_sqrt_t,
-            'error_data_t': error_data_t,
-            'error_data_sqrt_t': error_data_sqrt_t,
-            'budgets': budgets
+            'error_data': error_data,
+            'seqstr_data': seqstr_data,
+            'budgets': budgets,
+            'n_unitaries_per_budget': n_unitaries_per_budget
         }
         pickle.dump(budget_data,
-                    open(f"{save_dir}/budget_{gate_set}_results.pkl", 'wb'))
+                    open(f"{save_dir}/{gate_set}_results.pkl", 'wb'))
 
     # Save final complete results
     final_data = {
-        'budgets': budgets,
-        'error_data_t': error_data_t,
-        'std_t': std_t,
-        'error_data_sqrt_t': error_data_sqrt_t,
-        'std_sqrt_t': std_sqrt_t,
-        'n_unitaries_per_budget': n_unitaries_per_budget,
-        'config': {
-            'nc_budget_lower': nc_budget_lower,
-            'nc_budget_upper': nc_budget_upper
+            'error_data': error_data,
+            'seqstr_data': seqstr_data,
+            'budgets': budgets,
+            'n_unitaries_per_budget': n_unitaries_per_budget
         }
-    }
     pickle.dump(final_data, open(f"{save_dir}/{gate_set}_results.pkl", 'wb'))
-
-    np.save(f"{save_dir}/budgets.npy", np.array(budgets))
-    np.save(f"{save_dir}/error_data_t.npy", np.array(error_data_t))
-    np.save(f"{save_dir}/error_data_sqrt_t.npy", np.array(error_data_sqrt_t))
-
     return final_data
 
 
 
+
+def run_benchmark(args):
+    return benchmark_on_random_unitaries(**args)
+
+
 if __name__ == "__main__":
-    gate_set_cost_3 = "tqshxyz_tequiv_short_cost_3"
-    gate_set = "tqshxyz_tequiv_short"
-    benchmark_on_random_unitaries(n_unitaries_per_budget=500, nc_budget_lower=2, nc_budget_upper=12, gate_set=gate_set_cost_3, save_dir="./benchmark_results_500")
-    benchmark_on_random_unitaries(n_unitaries_per_budget=500, nc_budget_lower=2, nc_budget_upper=12,
-                                  gate_set=gate_set,  save_dir="./benchmark_results_500")
+    n_unitaries = 500
+    max_budget = 14
+    save_dir = f'./benchmark_results_{n_unitaries}'
+    gate_set_cost_3 = "tqshxyz_tequiv_medium_cost_3" #"tqshxyz_tequiv_short_cost_3"
+    gate_set_cost_2 = "tqshxyz_tequiv_medium" #"tqshxyz_tequiv_short"
+    gate_set_cost_25 = "tqshxyz_tequiv_medium_cost_2.5"
+    gate_set_t = "tshxyz_tequiv_medium"
+
+
+    tasks = [
+        dict(
+            n_unitaries_per_budget=n_unitaries,
+            budgets=np.arange(2, max_budget, 0.5),
+            gate_set=gate_set_cost_25,
+            save_dir=save_dir,
+            costs={"T": 1.0, "sqrtT": 2.5},
+        ),
+        dict(
+            n_unitaries_per_budget=n_unitaries,
+            budgets=np.arange(2, max_budget),
+            gate_set=gate_set_t,
+            save_dir=save_dir,
+            costs={"T": 1.0},
+        ),
+        dict(
+            n_unitaries_per_budget=n_unitaries,
+            budgets=np.arange(2, max_budget),
+            gate_set=gate_set_cost_2,
+            save_dir=save_dir,
+            costs={"T": 1.0, "sqrtT": 2.0},
+        ),
+    ]
     
+    with Pool(processes=3) as pool:  # or processes=None for "cpu_count()"
+        pool.map(run_benchmark, tasks)

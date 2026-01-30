@@ -20,14 +20,17 @@ trivial_cliffords = "xyz"
 clifford_gates = nontrivial_cliffords + trivial_cliffords
 nonclifford_gates = "tq"
 
+# Original maximum sequence length
+MAX_LEN = 5
+
 # Original directory (input)
 ORIG_DIR = (
-    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_short/"
+    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_medium/"
 )
 
 # New directory for T-equivalent grouping (output)
 NEW_DIR = (
-    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_tequiv_short/"
+    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_tequiv_medium_cost_2.5/"
 )
 
 os.makedirs(NEW_DIR, exist_ok=True)
@@ -36,7 +39,7 @@ def count_t_equiv(seqstr):
     """Count T-equivalent gates: t=1, q=2, cliffords=0"""
     t_count = seqstr.count('t')
     q_count = seqstr.count('q')
-    return t_count + 2 * q_count
+    return t_count + 2.5 * q_count
 
 
 def replace_and_drop(duplicates: dict[str, str], old: str, new: str) -> dict[str, str]:
@@ -76,10 +79,10 @@ if __name__ == "__main__":
         duplicates_0 = json.load(file)
 
     # Save base to new dir (unchanged)
-    np.save(f"{NEW_DIR}tensor_0.npy", matrices_0)
-    with open(f"{NEW_DIR}sequences_0.json", "w", encoding="utf-8") as file:
+    np.save(f"{NEW_DIR}tensor_0.0.npy", matrices_0)
+    with open(f"{NEW_DIR}sequences_0.0.json", "w", encoding="utf-8") as file:
         json.dump(sequences_0, file, indent=4)
-    with open(f"{NEW_DIR}duplicates_0.json", "w", encoding="utf-8") as file:
+    with open(f"{NEW_DIR}duplicates_0.0.json", "w", encoding="utf-8") as file:
         json.dump(duplicates_0, file, indent=4)
 
     print("Base Clifford data copied (0 T-equivalent).")
@@ -93,7 +96,7 @@ if __name__ == "__main__":
     all_duplicates = {0: duplicates_0}
 
     # Load ALL original data first
-    for orig_length in range(1, 5):
+    for orig_length in range(1, MAX_LEN + 1):
         matrices_k = np.load(f"{ORIG_DIR}tensor_{orig_length}.npy")
         with open(f"{ORIG_DIR}sequences_{orig_length}.json", "r") as f:
             sequences_k = json.load(f)

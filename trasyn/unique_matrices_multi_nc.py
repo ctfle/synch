@@ -73,7 +73,7 @@ if __name__ == "__main__":
     t_block = np.einsum("ij,jpk->pik", t(), matrices)
     sqrt_t_block = np.einsum("ij,jpk->pik", sqrt_t(), matrices)
 
-    for length in range(1, 5):
+    for length in range(1, 6):
         print(f"{length = }")
         with open(
                 f"{ASSETS_DIR}duplicates_{length - 1}.json",
