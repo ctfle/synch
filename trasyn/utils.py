@@ -155,3 +155,17 @@ try:
 
 except ImportError:
     pass
+
+
+def random_unitary_2x2():
+    # complex Ginibre matrix
+    Z = (np.random.randn(2, 2) + 1j * np.random.randn(2, 2)) / np.sqrt(2)
+
+    # QR decomposition
+    Q, R = np.linalg.qr(Z)
+
+    # fix phases to ensure uniform Haar measure
+    D = np.diag(R)
+    Q = Q * (D / np.abs(D))
+
+    return Q
