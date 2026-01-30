@@ -14,13 +14,14 @@ def benchmark_on_random_unitaries(
     costs: dict[str, float],
     load_dir: str,
     save_dir: str = "./benchmark_results",
+    max_partition_value: int = 5
 ):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
     for nc_budget in tqdm(budgets):
         partitioner = BudgetPartitioner(
-            max_partition_value=5, total_non_clifford_budget=nc_budget, costs=costs
+            max_partition_value=max_partition_value, total_non_clifford_budget=nc_budget, costs=costs
         )
         syn = Sythesiser(partitioner=partitioner, load_dir=load_dir)
 
