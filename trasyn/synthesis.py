@@ -11,12 +11,12 @@ from tqdm import tqdm
 from trasyn.utils import can_partition_with_multiples
 
 import numpy as np
+
 # from hypothesis.internal.conjecture.shrinking import Collection
 from numpy.random import Generator
 from numpy.typing import NDArray
 from matplotlib import pyplot as plt
 from sympy.physics.quantum.density import fidelity
-
 
 
 import os
@@ -49,13 +49,14 @@ seed = 42
 rng = np.random.default_rng(seed=seed)
 
 
-
 def _num_candidates(
-        nonclifford_count: int | NDArray[np.int64], nonclifford_gate: Literal["t"] = "t"
+    nonclifford_count: int | NDArray[np.int64], nonclifford_gate: Literal["t"] = "t"
 ) -> int | NDArray[np.int64]:
     if nonclifford_gate != "t":
-        raise NotImplementedError(f"Non-Clifford gate {nonclifford_gate} is not supported yet.")
-    return np.clip(72 * 2.0 ** nonclifford_count - 48, 0, None).astype(np.int64)
+        raise NotImplementedError(
+            f"Non-Clifford gate {nonclifford_gate} is not supported yet."
+        )
+    return np.clip(72 * 2.0**nonclifford_count - 48, 0, None).astype(np.int64)
 
 
 def _substitute_duplicates(target_sequence: str, lookup_table: dict[str, str]) -> str:
@@ -68,19 +69,20 @@ def _substitute_duplicates(target_sequence: str, lookup_table: dict[str, str]) -
 
 
 @dataclass
-class SynthesisResult():
+class SynthesisResult:
     seqstr: str
     error: float
 
 
+class BudgetPartitioner:
+    """Not sure about the factor of 2"""
 
-class BudgetPartitioner():
-
-    """ Not sure about the factor of 2 """
-
-    def __init__(self, costs: dict[str, float],
-                 total_non_clifford_budget: float,
-                 max_partition_value: float):
+    def __init__(
+        self,
+        costs: dict[str, float],
+        total_non_clifford_budget: float,
+        max_partition_value: float,
+    ):
         self.costs = costs
         self.total_non_clifford_budget = total_non_clifford_budget
         self.max_partition_value = max_partition_value
@@ -90,10 +92,14 @@ class BudgetPartitioner():
     def _verify_costs(self):
         assert np.allclose(self.min_gate_cost, 1), "min cost should be set to 1."
         for cost in self.costs.values():
-            assert cost.is_integer() or (cost - 0.5).is_integer(), "Costs must be integer or multiple of 1/2."
+            assert cost.is_integer() or (cost - 0.5).is_integer(), (
+                "Costs must be integer or multiple of 1/2."
+            )
 
     def _verify_max_partition_value(self):
-        assert self.max_partition_value >= self.max_gate_cost * 2, f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
+        assert self.max_partition_value >= self.max_gate_cost * 2, (
+            f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
+        )
 
     @property
     def cost_values(self) -> list[float]:
@@ -113,8 +119,10 @@ class BudgetPartitioner():
 
     def partition(self) -> list[list[float]] | list[list[int]]:
         if self.all_costs_integer:
-            budgets = [self._get_integer_partition(i)
-                       for i in range(int(self.total_non_clifford_budget + 1))]
+            budgets = [
+                self._get_integer_partition(i)
+                for i in range(int(self.total_non_clifford_budget + 1))
+            ]
         else:
             budgets = []
             for i in np.arange(0, self.total_non_clifford_budget + 0.5, 0.5):
@@ -150,7 +158,9 @@ class BudgetPartitioner():
                 # odd number of .5 numbers must be used
                 # split off max_cost
                 partition = [self.max_gate_cost]
-                partition.extend(self._complete_partitioning(input - self.max_gate_cost))
+                partition.extend(
+                    self._complete_partitioning(input - self.max_gate_cost)
+                )
 
         return partition
 
@@ -164,14 +174,21 @@ class BudgetPartitioner():
         return partition
 
     def _original_partitioning(self):
-        budgets = [[curr_budget + 1] for curr_budget in range(int(min(self.total_non_clifford_budget, self.max_partition_value)))]
-        for curr_budget in range(int(self.max_partition_value + 1), int(self.total_non_clifford_budget + 1)):
+        budgets = [
+            [curr_budget + 1]
+            for curr_budget in range(
+                int(min(self.total_non_clifford_budget, self.max_partition_value))
+            )
+        ]
+        for curr_budget in range(
+            int(self.max_partition_value + 1), int(self.total_non_clifford_budget + 1)
+        ):
             # compute how many tensors we need. in this for loop the first value is 2
-            num_tensors =int( (curr_budget - 1) // self.max_partition_value + 1 )
-            #print(curr_budget, num_tensors)
+            num_tensors = int((curr_budget - 1) // self.max_partition_value + 1)
+            # print(curr_budget, num_tensors)
             # compute the floor i.e. instead of [5] append [2, 2]
             budget_decomposition = [curr_budget // num_tensors] * num_tensors
-            #print(budget_decomposition)
+            # print(budget_decomposition)
             # eventually we want that the sum of the elements of this list is exactly current budget
             # in the example above we turned [5] into [2,2] but sum([2,2]) = 4
             # to correct for this, we pick the fist element of the and replace it with the correct
@@ -184,7 +201,9 @@ class BudgetPartitioner():
             else:
                 budget_element = curr_budget - sum(budget_decomposition[1:])
                 index = 1
-                while budget_element > self.max_partition_value and index < len(budget_decomposition):
+                while budget_element > self.max_partition_value and index < len(
+                    budget_decomposition
+                ):
                     budget_decomposition[index] += 1
                     index += 1
                     budget_element -= 1
@@ -198,17 +217,16 @@ class BudgetPartitioner():
         return budgets
 
 
-
-class Sythesiser():
-
-    def __init__(self,
+class Sythesiser:
+    def __init__(
+        self,
         partitioner: BudgetPartitioner,
         error_threshold: float | None = None,
-        gate_set: str = "tshxyz",
+        load_dir: str = f"{ASSETS_DIR}" + "tshxyz",
         num_attempts: int = 5,
-        num_samples: int | None = None,):
-
-        self.gate_set = gate_set.lower()
+        num_samples: int | None = None,
+    ):
+        self.load_dir = load_dir
         self.error_threshold = error_threshold
         self._num_samples = num_samples
         self.num_attempts = num_attempts
@@ -225,23 +243,19 @@ class Sythesiser():
                 return 1
             else:
                 return self.mem_size // (
-                        max(tsr.shape[1] * tsr.shape[2] for tsr in mps[1:]) * 2 ** (
-                        4 + len(budget))
+                    max(tsr.shape[1] * tsr.shape[2] for tsr in mps[1:])
+                    * 2 ** (4 + len(budget))
                 )
         else:
             return self._num_samples
 
     @property
-    def load_dir(self):
-        return f"{ASSETS_DIR}/{self.gate_set}/"
-
-    @property
     def budget_composition(self) -> list[list[int]] | list[list[float]]:
-        """ Computes a list of lists where each element yields a possible composition of ints that
+        """Computes a list of lists where each element yields a possible composition of ints that
          sum to the index + 1 of this element in the list. Example:
          [[1], [2], [3], [4], [3,2], [3,3]]
         Up to max count we can use list with a single entry. Then we need to do combinations.
-         """
+        """
         return self.budget_partitioner.partition()
 
     def get_tensor(self, budget: int):
@@ -249,7 +263,7 @@ class Sythesiser():
         Loads a tensor with a given non-clifford budget. Shape is (2, N, 2) where N is the number
         of different 2x2 matrices given the fixed non-clifford budget.
         """
-        return np.load(self.load_dir + f"tensor_{budget:.1f}.npy")
+        return np.load(self.load_dir + "/" + f"tensor_{budget:.1f}.npy")
 
     def get_tensor_as_str(self, budget: float) -> list[str]:
         """
@@ -257,10 +271,9 @@ class Sythesiser():
         """
         # load sequence strings
         with open(
-                self.load_dir +
-                f"sequences_{budget:.1f}.json",
-                "r",
-                encoding="utf-8",
+            self.load_dir + "/" + f"sequences_{budget:.1f}.json",
+            "r",
+            encoding="utf-8",
         ) as f:
             sequences = json.load(f)
 
@@ -272,17 +285,16 @@ class Sythesiser():
         """
         # load sequence strings
         with open(
-                self.load_dir +
-                f"duplicates_{budget:.1f}.json",
-                "r",
-                encoding="utf-8",
+            self.load_dir + "/" + f"duplicates_{budget:.1f}.json",
+            "r",
+            encoding="utf-8",
         ) as f:
             duplicates = json.load(f)
 
         return duplicates
 
     def get_sequence_of_tensors(self, budget: list[int]) -> list[NDArray]:
-        """ Generate a list of corresponding tensors according to budget. """
+        """Generate a list of corresponding tensors according to budget."""
         return [self.get_tensor(b) for b in budget]
 
     def get_sequence_of_tensors_as_str(self, budget: Iterable[int]) -> list[list[str]]:
@@ -291,12 +303,14 @@ class Sythesiser():
     def get_duplicates(self, budget: list[int]) -> Iterable[dict[str, str]]:
         return [self.get_duplicate_as_str(b) for b in budget]
 
-    def sample_and_synthesize(self, target_unitary: NDArray, verbose: bool) -> SynthesisResult:
+    def sample_and_synthesize(
+        self, target_unitary: NDArray, verbose: bool
+    ) -> SynthesisResult:
         fidelity = 0
         bitstring = None
         result = SynthesisResult(error=2, seqstr="")
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
-            #print(budget)
+            # print(budget)
             mps = self.get_sequence_of_tensors(budget)
             mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)
@@ -310,12 +324,14 @@ class Sythesiser():
             fidelity /= 2
             # TODO: this makes no sense. Fidelity should not be > 1
             fidelity = min(fidelity, 1)
-            error = np.sqrt(1 - fidelity ** 2)
+            error = np.sqrt(1 - fidelity**2)
             if verbose:
                 print(f"Budget: {budget}, Num samples: {n_samples}")
                 print(f"Error:{error}, Fidelity: {fidelity}")
             if error < result.error:
-                result = SynthesisResult(error=error, seqstr=self.get_sequence_str(bitstring, budget))
+                result = SynthesisResult(
+                    error=error, seqstr=self.get_sequence_str(bitstring, budget)
+                )
             if self.error_threshold is not None and error <= self.error_threshold:
                 break
 
@@ -328,7 +344,7 @@ class Sythesiser():
         return result
 
     def get_sequence_str(self, indices: Iterable[int], budget: Iterable[int]) -> str:
-        """ Get the sequences of gates as str associated with the budget and the indices """
+        """Get the sequences of gates as str associated with the budget and the indices"""
         tensors_as_string = self.get_sequence_of_tensors_as_str(budget)
         duplicates = self.get_duplicates(budget)
         seqstr = []

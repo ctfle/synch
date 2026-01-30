@@ -1,10 +1,15 @@
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
-from trasyn.results.utils import get_mean_and_std, fit_and_plot, analyse_sequence
+from trasyn.results.utils import (
+    get_mean_and_std,
+    fit_and_plot,
+    analyse_sequence,
+    extract_budget_files,
+)
 
 
-dir = "../benchmark_results_500"
+dir = "./benchmark_results_100"
 colors = ["red", "blue", "green"]
 labels = ["T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)", "T"]
 gate_sets = ["tqshxyz_tequiv_medium_cost_2.5", "tshxyz_tequiv_medium"]
@@ -16,11 +21,19 @@ gate_sets = ["tqshxyz_tequiv_medium_cost_2.5", "tshxyz_tequiv_medium"]
 
 # get the t and q count for each budget point
 # cost 2.5
-with open(dir + f"/{gate_sets[0]}_results.pkl", "rb") as file:
-    data = pickle.load(file)
+error_data = {}
+sequences = {}
+budgets = []
 
-budgets = data["budgets"]
-sequences = data["seqstr_data"]
+load_dir = dir + "/" + gate_sets[0] + "/"
+for budget, path in extract_budget_files(load_dir):
+    with open(path, "rb") as file:
+        data = pickle.load(file)
+
+    budgets.append(budget)
+    error_data[budget] = data["error_data"]
+    sequences[budget] = data["seqstr_data"]
+
 
 gates = ["t", "q"]
 budget_points = []
@@ -35,7 +48,16 @@ for budget, sequence_data in sequences.items():
         gates_std[g].append(np.std(gate_occurences))
 
 for g, gate in enumerate(gates):
-    plt.errorbar(budget_points, gates_means[g], yerr=gates_std[g], capsize=5, fmt='o-',label=gate, color=colors[g], ecolor=colors[g])
+    plt.errorbar(
+        budget_points,
+        gates_means[g],
+        yerr=gates_std[g],
+        capsize=5,
+        fmt="o-",
+        label=gate,
+        color=colors[g],
+        ecolor=colors[g],
+    )
 
 plt.ylabel("(avg. gate occurrence)")
 plt.xlabel("non-clifford budget")
@@ -45,3 +67,69 @@ plt.tight_layout()
 plt.legend()
 plt.show()
 
+
+# compute true total cost for the found sequences
+gates = ["t", "q"]
+costs = [1, 2.5]
+budget_points = []
+cost_means = []
+cost_std = []
+for budget, sequence_data in sequences.items():
+    budget_points.append(budget)
+    analysed_seqs = analyse_sequence(sequence_data, gates)
+    total_cost = list(
+        map(lambda x: sum(costs[g] * x[g] for g in range(len(x))), analysed_seqs)
+    )
+    cost_means.append(np.mean(total_cost))
+    cost_std.append(np.std(total_cost))
+
+plt.errorbar(
+    budget_points, cost_means, yerr=cost_std, capsize=5, fmt="o-", label="costs"
+)
+
+plt.ylabel("(avg. gate occurrence)")
+plt.xlabel("non-clifford budget")
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.legend()
+plt.show()
+
+
+def get_ratio(x):
+    if x[0] != 0:
+        return x[1] / x[0]
+    else:
+        return 10
+
+
+gates = ["t", "q"]
+budget_points = []
+ratio_means = []
+ratio_std = []
+for budget, sequence_data in sequences.items():
+    budget_points.append(budget)
+    analysed_seqs = analyse_sequence(sequence_data, gates)
+    ratio = list(map(get_ratio, analysed_seqs))
+    ratio_means.append(np.mean(ratio))
+    ratio_std.append(np.std(ratio))
+
+for g, gate in enumerate(gates):
+    plt.errorbar(
+        budget_points,
+        ratio_means,
+        yerr=ratio_std,
+        capsize=5,
+        fmt="o-",
+        label=gate,
+        color=colors[g],
+        ecolor=colors[g],
+    )
+
+plt.ylabel("(avg. gate occurrence)")
+plt.xlabel("non-clifford budget")
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.legend()
+plt.show()

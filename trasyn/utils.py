@@ -25,12 +25,16 @@ def _seq2mat_cache(gate_seq: str) -> NDArray[np.complex128]:
             raise ValueError(
                 f"Unknown gate: {gate_seq}. Available gates: {', '.join(GATES)}."
             ) from err
-    return _seq2mat_cache(gate_seq[: length // 2]) @ _seq2mat_cache(gate_seq[length // 2 :])
+    return _seq2mat_cache(gate_seq[: length // 2]) @ _seq2mat_cache(
+        gate_seq[length // 2 :]
+    )
 
 
 def seq2mat(gate_seq: str) -> NDArray[np.complex128]:
     if len(gate_seq) > MAX_CACHE_LEN:
-        return _seq2mat_cache(gate_seq[:MAX_CACHE_LEN]) @ seq2mat(gate_seq[MAX_CACHE_LEN:])
+        return _seq2mat_cache(gate_seq[:MAX_CACHE_LEN]) @ seq2mat(
+            gate_seq[MAX_CACHE_LEN:]
+        )
     return _seq2mat_cache(gate_seq)
 
 
@@ -54,7 +58,9 @@ def transpose(
         source.append(first_qubit + num_qubits)
         destination.append(second_qubit + num_qubits)
         tsr_shape = [2] * (2 * num_qubits)
-    return np.moveaxis(system.reshape(tsr_shape), source, destination).reshape(original_shape)
+    return np.moveaxis(system.reshape(tsr_shape), source, destination).reshape(
+        original_shape
+    )
 
 
 def find_file_to_read(
@@ -68,7 +74,9 @@ def find_file_to_read(
         if directory.endswith("/"):
             directory = directory[:-1]
         for filename in sorted(os.listdir(directory)):
-            if filename in exclude_filenames or any(k in filename for k in exclude_keywords):
+            if filename in exclude_filenames or any(
+                k in filename for k in exclude_keywords
+            ):
                 continue
             if os.path.isdir(path := f"{directory}/{filename}"):
                 yield from find_file_to_read(path, exclude_keywords, exclude_filenames)
@@ -149,8 +157,11 @@ try:
     ) -> Generator[tuple[str, QuantumCircuit], None, None]:
         for path in find_file_to_read(base_dir, exclude_keywords, exclude_filenames):
             if (filename := path.split("/")[-1]).endswith(".qasm"):
-                yield filename[:-5].lower().replace("_", " "), qasm2.load(
-                    path, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS
+                yield (
+                    filename[:-5].lower().replace("_", " "),
+                    qasm2.load(
+                        path, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS
+                    ),
                 )
 
 except ImportError:

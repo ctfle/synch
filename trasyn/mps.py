@@ -145,7 +145,7 @@ def _sample(
                     (
                         indices[:split],
                         indices[
-                            rng.choice( # pending cupy issue #8293 to enable cupy equivalent
+                            rng.choice(  # pending cupy issue #8293 to enable cupy equivalent
                                 np.arange(split, projected_tsr.shape[0]),
                                 size=num_samples - split,
                                 replace=False,

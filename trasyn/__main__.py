@@ -29,7 +29,9 @@ def main():
         help="An expression of the target unitary or a filename, e.g. 'Rz(3*pi/8)', "
         + "'u(0.1, pi+0.2, 0.3**0.5)', 'unitary.npy', or 'circuit.qasm'.",
     )
-    parser.add_argument("budget", type=int, help="The non-Clifford gate budget for synthesis. ")
+    parser.add_argument(
+        "budget", type=int, help="The non-Clifford gate budget for synthesis. "
+    )
     parser.add_argument(
         "-e",
         "--error-threshold",
@@ -76,7 +78,9 @@ def main():
         dest="gpu",
         help="Do not use GPU for synthesis.",
     )
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility.")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random seed for reproducibility."
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -109,7 +113,9 @@ def main():
             args.save_path = args.target.replace(".qasm", "_synthesized.qasm")
         qasm2.dump(
             synthesize_qiskit_circuit(
-                qasm2.load(args.target, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS),
+                qasm2.load(
+                    args.target, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS
+                ),
                 args.transpile,
                 nonclifford_budget=args.budget,
                 gate_set=args.gate_set,
@@ -129,7 +135,7 @@ def main():
         r"^\s*(" + "|".join(GATES) + r")\s*\(\s*([\d\.\s,\/\*\+\-\(\)]|pi)*\s*\)\s*",
         args.target.lower(),
     ):
-        target = eval( # pylint: disable=eval-used
+        target = eval(  # pylint: disable=eval-used
             args.target.lower(),
             GATES | {"pi": pi, "__builtins__": None},
         )

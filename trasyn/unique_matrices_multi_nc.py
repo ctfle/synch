@@ -21,9 +21,7 @@ trivial_cliffords = "xyz"
 clifford_gates = nontrivial_cliffords + trivial_cliffords
 nonclifford_gate = "t"
 nonclifford_gates = "tq"
-ASSETS_DIR = (
-    f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_medium/"
-)
+ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/assets/{nonclifford_gates}{clifford_gates}_medium/"
 
 if __name__ == "__main__":
     try:
@@ -76,12 +74,14 @@ if __name__ == "__main__":
     for length in range(1, 6):
         print(f"{length = }")
         with open(
-                f"{ASSETS_DIR}duplicates_{length - 1}.json",
-                "r",
-                encoding="utf-8",
+            f"{ASSETS_DIR}duplicates_{length - 1}.json",
+            "r",
+            encoding="utf-8",
         ) as file:
             duplicates = json.load(file)
-        with open(f"{ASSETS_DIR}sequences_{length - 1}.json", "r", encoding="utf-8") as file:
+        with open(
+            f"{ASSETS_DIR}sequences_{length - 1}.json", "r", encoding="utf-8"
+        ) as file:
             sequences = json.load(file)
         matrices = np.load(f"{ASSETS_DIR}tensor_{length - 1}.npy").transpose(1, 0, 2)
         matrices = cp.asarray(matrices)
@@ -92,9 +92,11 @@ if __name__ == "__main__":
         # for (mat1, seq1), (mat2, seq2) in product(
         #         zip(matrices, sequences), zip(t_block, hs_sequences)):
         for (mat1, seq1), (mat2, seq2, nc_symb) in product(
-                zip(matrices, sequences),
-                chain(zip(t_block, hs_sequences, ["T"] * len(hs_sequences)),
-                      zip(sqrt_t_block, hs_sequences, ["sqrtT"] * len(hs_sequences)))
+            zip(matrices, sequences),
+            chain(
+                zip(t_block, hs_sequences, ["T"] * len(hs_sequences)),
+                zip(sqrt_t_block, hs_sequences, ["sqrtT"] * len(hs_sequences)),
+            ),
         ):
             if nc_symb == "T":
                 seqstr = _substitute_duplicates(seq1 + "t" + seq2, duplicates)
@@ -103,8 +105,12 @@ if __name__ == "__main__":
 
             counter += 1
             if counter % 20 == 0:
-                print(counter, len(sequences), len(hs_sequences),
-                      len(sequences) * len(hs_sequences))
+                print(
+                    counter,
+                    len(sequences),
+                    len(hs_sequences),
+                    len(sequences) * len(hs_sequences),
+                )
             if seqstr in sequences:
                 continue
             matrix = mat1 @ mat2
@@ -135,12 +141,16 @@ if __name__ == "__main__":
                     duplicates[seqstr] = existing_seq
 
         print(len(matrices), len(sequences), len(duplicates))
-        np.save(f"{ASSETS_DIR}tensor_{length}.npy", asnumpy(matrices.transpose(1, 0, 2)))
-        with open(f"{ASSETS_DIR}sequences_{length}.json", "w", encoding="utf-8") as file:
+        np.save(
+            f"{ASSETS_DIR}tensor_{length}.npy", asnumpy(matrices.transpose(1, 0, 2))
+        )
+        with open(
+            f"{ASSETS_DIR}sequences_{length}.json", "w", encoding="utf-8"
+        ) as file:
             json.dump(sequences, file, indent=4)
         with open(
-                f"{ASSETS_DIR}duplicates_{length}.json",
-                "w",
-                encoding="utf-8",
+            f"{ASSETS_DIR}duplicates_{length}.json",
+            "w",
+            encoding="utf-8",
         ) as file:
             json.dump(duplicates, file, indent=4)

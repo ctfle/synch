@@ -66,7 +66,10 @@ def u(theta: float, phi: float, lam: float) -> NDArray[np.complex128]:
     return np.array(
         [
             [np.cos(theta / 2), -np.exp(1j * lam) * np.sin(theta / 2)],
-            [np.exp(1j * phi) * np.sin(theta / 2), np.exp(1j * (phi + lam)) * np.cos(theta / 2)],
+            [
+                np.exp(1j * phi) * np.sin(theta / 2),
+                np.exp(1j * (phi + lam)) * np.cos(theta / 2),
+            ],
         ]
     )
 
