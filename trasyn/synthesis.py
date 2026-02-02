@@ -191,7 +191,7 @@ class BudgetPartitioner:
             # print(budget_decomposition)
             # eventually we want that the sum of the elements of this list is exactly current budget
             # in the example above we turned [5] into [2,2] but sum([2,2]) = 4
-            # to correct for this, we pick the fist element of the and replace it with the correct
+            # to correct for this, we pick the fist element and replace it with the correct
             # value which is curr_budget -sum(all but the first element)
 
             # now it can happen that the first element in the budget_decomposition is > max_count
