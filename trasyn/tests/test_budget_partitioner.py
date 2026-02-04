@@ -71,13 +71,24 @@ class TestBudgetPartitioner:
             [4.0, 4.0, 2.0],
         ]
 
-    def test_integets_2(self):
-        costs = {"T": 1.0, "sqrtT": 3.0}
+    def test_partitioning(self):
+        costs = {"T": 1.0}
         budget = BudgetPartitioner(
-            costs=costs, total_non_clifford_budget=6, max_partition_value=4
+            costs=costs, total_non_clifford_budget=10, max_partition_value=5, minimize_partition_count=False
         )
         partition = budget.partition()
-        print(partition)
+        for part in partition:
+            # no partition is larger than twice the max cost
+            if len(part)>1:
+                assert all([(p > costs["T"] * 2) is False for p in part])
+
+        budget = BudgetPartitioner(
+            costs=costs, total_non_clifford_budget=10, max_partition_value=5, minimize_partition_count=True
+        )
+        # with minimize we reduce the number of partitions
+        minimized = budget.partition()
+        assert minimized == [[0], [1], [2], [3], [4], [4.0, 1.0], [4.0, 2.0],
+                             [4.0, 3.0], [4.0, 4.0], [4.0, 4.0, 1.0], [4.0, 4.0, 2.0]]
 
     @pytest.mark.parametrize("max_partition_value", [1, 2, 3, 4])
     def test_max_partition_value_too_small(self, max_partition_value: int):

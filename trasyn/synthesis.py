@@ -82,10 +82,12 @@ class BudgetPartitioner:
         costs: dict[str, float],
         total_non_clifford_budget: float,
         max_partition_value: float,
+        minimize_partition_count: bool = True
     ):
         self.costs = costs
         self.total_non_clifford_budget = total_non_clifford_budget
         self.max_partition_value = max_partition_value
+        self.minimize_partition_count = minimize_partition_count
         self._verify_costs()
         self._verify_max_partition_value()
 
@@ -129,7 +131,10 @@ class BudgetPartitioner:
                 partition = self._get_non_integer_partition(i)
                 if len(partition) > 0:
                     budgets.append(partition)
-
+        
+        if self.minimize_partition_count:
+            budgets = self._minimize_partitioning(budgets)
+        
         return budgets
 
     def _get_integer_partition(self, input: int) -> list[int]:
@@ -173,6 +178,21 @@ class BudgetPartitioner:
         partition.append(remainder)
         return partition
 
+    def _minimize_partitioning(self, budgets: list[list[int | float]]) -> list[list[int | float]]:
+        """ Minimizes the number of partitions in each element of the input list. """
+        new_budgets_partitioning = []
+        for budget_partition in budgets:       
+            new_budget = [budget_partition[0]]
+            for part in budget_partition[1:]:
+                if new_budget[-1] + part < self.max_partition_value:
+                    new_budget[-1] += part
+                else: 
+                    new_budget.append(part)
+            
+            new_budgets_partitioning.append(new_budget)
+            
+        return new_budgets_partitioning
+        
     def _original_partitioning(self):
         budgets = [
             [curr_budget + 1]
