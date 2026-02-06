@@ -1,6 +1,9 @@
 import numpy as np
 from trasyn.benchmark.utils import generate_unitaries, benchmark_on_random_unitaries, SEED
 
+SEED = 42
+np.random.seed(SEED)
+
 def run_benchmark(args):
     return benchmark_on_random_unitaries(**args)
 
@@ -24,6 +27,7 @@ if __name__ == "__main__":
             budgets=np.arange(min_budget, max_budget),
             load_dir="../../assets/" + gate_set_t,
             save_dir=save_dir + "/" + gate_set_t,
+            seed=SEED,
             costs={"T": 1.0},
             num_attempts=num_attempts,
             num_samples=num_samples
@@ -33,6 +37,7 @@ if __name__ == "__main__":
             budgets=np.arange(min_budget, max_budget, 0.5),
             load_dir="../../assets/" + gate_set_cost_25,
             save_dir=save_dir + "/" + gate_set_cost_25,
+            seed=SEED,
             costs={"T": 1.0, "sqrtT": 2.5},
             num_attempts=num_attempts,
             num_samples=num_samples

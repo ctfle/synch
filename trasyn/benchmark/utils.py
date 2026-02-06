@@ -2,14 +2,10 @@ import re
 from pathlib import Path
 import numpy as np
 import scipy.optimize
-from scipy.constants import sigma
 from tqdm import tqdm
 import pickle
 from trasyn.synthesis import BudgetPartitioner, Sythesiser
 from trasyn.utils import random_unitary_2x2
-
-SEED = 42
-np.random.seed(SEED)
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 
@@ -35,10 +31,11 @@ def fit_and_plot_with_scipy(n: list[int | float], error: NDArray, d_error: NDArr
         return b * np.exp(a*x)
 
     popt, pcov = scipy.optimize.curve_fit(_func, n, 1/error, sigma=(1/error**2 *d_error))
+    perr = np.sqrt(np.diag(pcov))
+    perr_prop =  1/popt[0]**2 * perr[0]
     plt.plot(n, _func(n, *popt), '--',
-             label=f'$n = {np.round(1/popt[0],2)}\log(1/\epsilon)$',
+             label=f'$n = ({np.round(1/popt[0],2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon)$',
              color=color)
-
 
 
 def get_mean_and_std(
@@ -89,11 +86,12 @@ def benchmark_on_random_unitaries(
     budgets: list[float] | list[int],
     costs: dict[str, float],
     load_dir: str,
+    seed: int,
     save_dir: str = "./benchmark_results",
     max_partition_value: int = 5,
     num_attempts: int = 5,
     num_samples: int | None = None,
-    minimize_partitioning: bool = True
+    minimize_partitioning: bool = True,
 ):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
@@ -121,7 +119,7 @@ def benchmark_on_random_unitaries(
             "seqstr_data": seqs,
             "budgets": budgets,
             "n_unitaries_per_budget": len(unitaries),
-            "seed": SEED
+            "seed": seed
         }
         pickle.dump(
             budget_data, open(f"{save_dir}/budget_{nc_budget}_results.pkl", "wb")
@@ -133,6 +131,7 @@ def benchmark_budget(
     budget: int | float,
     costs: dict[str, float],
     load_dir: str,
+    seed: int,
     save_dir: str = "./benchmark_results",
     max_partition_value: int = 5,
     num_attempts: int = 5,
@@ -163,7 +162,7 @@ def benchmark_budget(
         "error_data": errors,
         "seqstr_data": seqs,
         "n_unitaries_per_budget": len(unitaries),
-        "seed": SEED
+        "seed": seed
     }
     pickle.dump(
         budget_data, open(f"{save_dir}/budget_{budget}_num_samples_{num_samples}_results.pkl", "wb")

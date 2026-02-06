@@ -184,15 +184,28 @@ class BudgetPartitioner:
         for budget_partition in budgets:       
             new_budget = [budget_partition[0]]
             for part in budget_partition[1:]:
-                if new_budget[-1] + part < self.max_partition_value:
-                    new_budget[-1] += part
-                else: 
+                ind = self._adds_to(new_budget, part)
+                if ind is not None:
+                    new_budget[ind] += part
+                else:
                     new_budget.append(part)
             
             new_budgets_partitioning.append(new_budget)
-            
         return new_budgets_partitioning
-        
+
+    def _adds_to(self, budget_partitioning: list[int | float], value: int | float) -> int | None:
+        """
+        Looks into budget_partitioning and checks if value can be added to any element 
+        so that this element is still < self.max_partition_value. Returns the index of the 
+        corresponding element or None otherwise.
+        """
+        index = None
+        for i, budget in enumerate(budget_partitioning):
+            if value + budget <= self.max_partition_value:
+                index = i
+                break
+        return index
+    
     def _original_partitioning(self):
         budgets = [
             [curr_budget + 1]
@@ -330,6 +343,7 @@ class Sythesiser:
         bitstring = None
         result = SynthesisResult(error=2, seqstr="")
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
+            #print(budget)
             mps = self.get_sequence_of_tensors(budget)
             mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)
