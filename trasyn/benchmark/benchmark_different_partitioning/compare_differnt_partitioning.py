@@ -3,19 +3,18 @@ import matplotlib.pyplot as plt
 from trasyn.benchmark.utils import get_mean_and_std, fit_and_plot, extract_budget_files
 
 
-dir = "./benchmark_results_1000"
+dirs = ["./benchmark_results_100_seed_42min", "./benchmark_results_100_seed_42no_min"]
 colors = ["red", "blue", "green"]
-labels = ["T", "T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)"]
-gate_sets_dir = [
-"tshxyz_tequiv_medium", ] # "tqshxyz_tequiv_medium_cost2", "tqshxyz_tequiv_medium_cost_2.5" ]
+labels = ["T min", "T no min"]
+gate_sets_dir = "tshxyz_tequiv_medium"
 
 
-for gs, color, label in zip(gate_sets_dir, colors, labels):
+for dir, color, label in zip(dirs, colors, labels):
     error_data = {}
     sequences = {}
     budgets = []
 
-    load_dir = dir + "/" + gs + "/"
+    load_dir = dir + "/" + gate_sets_dir + "/"
     for budget, path in extract_budget_files(load_dir):
         with open(path, "rb") as file:
             data = pickle.load(file)

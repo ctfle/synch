@@ -9,7 +9,7 @@ from trasyn.benchmark.utils import (
 )
 
 
-dir = "./benchmark_results_100"
+dir = "benchmark_results_1000"
 colors = ["red", "blue", "green"]
 labels = ["T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)", "T"]
 gate_sets = ["tqshxyz_tequiv_medium_cost_2.5", "tshxyz_tequiv_medium"]
@@ -39,19 +39,32 @@ gates = ["t", "q"]
 budget_points = []
 gates_means = [[] for gate in gates]
 gates_std = [[] for gate in gates]
+
+low_err = [[] for gate in gates]
+upp_err = [[] for gate in gates]
+ratio = []
+
 for budget, sequence_data in sequences.items():
     budget_points.append(budget)
     analysed_seqs = analyse_sequence(sequence_data, gates)
     for g, gate in enumerate(gates):
         gate_occurences = list(map(lambda x: x[g], analysed_seqs))
-        gates_means[g].append(np.mean(gate_occurences))
-        gates_std[g].append(np.std(gate_occurences))
+        median = np.median(gate_occurences)
+        gates_means[g].append(median)
+        low, high = np.percentile(gate_occurences, [16, 84])
+        low_err[g].append(median - low)
+        upp_err[g].append(high - median)
+        
+ratio = np.array(gates_means[1]) / np.array(gates_means[0])
+
+
 
 for g, gate in enumerate(gates):
+    
     plt.errorbar(
         budget_points,
         gates_means[g],
-        yerr=gates_std[g],
+        yerr=[low_err[g], upp_err[g]],
         capsize=5,
         fmt="o-",
         label=gate,
@@ -59,7 +72,8 @@ for g, gate in enumerate(gates):
         ecolor=colors[g],
     )
 
-plt.ylabel("(avg. gate occurrence)")
+    plt.plot(budget_points, ratio, "o--")
+plt.ylabel("number of gates")
 plt.xlabel("non-clifford budget")
 plt.legend()
 plt.grid(True, alpha=0.3)
