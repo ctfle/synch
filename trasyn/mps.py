@@ -29,8 +29,12 @@ def _svd(
     rank: int | None = None,
     absorb_s: Literal["left", "even", "right"] = "left",
 ) -> tuple[NDArray[np.complex128], NDArray[np.complex128], NDArray[np.complex128]]:
+    
+    # tsr = u @ np.diag(s) @ vh 
     u, s, vh = np.linalg.svd(tsr, full_matrices=False)
     if rank is None:
+        # the entries in s are sorted (largest to smallest) that's why we set the rank to the number 
+        # of non-zero entries and drop the rest 
         if (nonzero_indices := np.argwhere(np.isclose(s, 0))).size > 0:
             rank = nonzero_indices[0][0]
         else:
@@ -51,11 +55,42 @@ def _swap_local(
     rank: int | None = None,
     absorb_s: Literal["left", "even", "right"] = "left",
 ) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
+    """
+    Step 1: Contraction and flipping the indices of legs
+  
+             p       q                     q   p
+       |     |       |              |    ┌-┘---└-┐ 
+    -- ■ -i- ■ -j-j- ■ -k-  =>   -- ■ -i-|       |-k-
+                                         └-------┘ 
+    
+    Step 2: reshape => SVD => reshape
+        1. reshape into 2-d tensor
+                  q   p
+                ┌-┘---└-┐           
+            -i- |       |-k-  
+                └-------┘       
+                    
+                ┌-------┐           
+        --i*q-- |       |--p*k-- 
+                └-------┘       
+    
+        2. SVD 
+        --i*q--■ -- s -- ■--p*k--  => left absorb s =>    --i*q--■ -- ■--p*k--
+        
+        3. reshape
+                                      q    p
+                                      |    |
+        --i*q--■ -- ■--p*k-- =>  --i--■ -- ■--k--  
+    """
+    # each tensor has 3 dimensions -> After contraction we get a 4-dmin tensor
     tsr = np.einsum("ipj,jqk->iqpk", tsr1, tsr2)
     shape = tsr.shape
     if rank == 0:
         rank = tsr1.shape[2]
-    u, _, vh = _svd(tsr.reshape(np.prod(shape[:2]), -1), rank, absorb_s)
+    # reshape it into a 2-dimensional tensor by combining the first 2 (iq) and the last 2 (pk)
+    reshaped_tsr = tsr.reshape(np.prod(shape[:2]), -1)
+    # do SVD (left absorb s) and reshape back into 3-d tensors
+    u, _, vh = _svd(reshaped_tsr, rank, absorb_s)
     return u.reshape(*shape[:2], -1), vh.reshape(-1, *shape[2:])
 
 
@@ -86,14 +121,15 @@ def _swap(
 def _trace_target_unitary(
     mps: Sequence[NDArray[np.complex128]],
     target_unitary: NDArray[np.complex128],
-    rank: int | None = None,
-    absorb_s: Literal["left", "even", "right"] = "left",
+    rank: int | None = None, # in all uses in this code rank = None
+    absorb_s: Literal["left", "even", "right"] = "left", # in all uses absorb_s = left
 ) -> list[NDArray[np.complex128]]:
     if len(mps) == 1:
-        # pylint: disable=too-many-function-args
+        # in this case we can directly compute the trace
         return [
             np.einsum("ipj,ji->p", mps[0], target_unitary.T.conj()).reshape(1, -1, 1)
         ]
+    # otherwise we need to "swap" the tensors (translating to a SVD) 
     mps = _swap(
         list(mps) + [target_unitary.T.conj().reshape(*target_unitary.shape, 1)],
         rank=rank,
@@ -111,6 +147,20 @@ def _sample(
     max_fixed_fraction: float = 0,
     rng: np.random.Generator | int | None = None,
 ) -> tuple[NDArray[np.int64], float]:
+    """
+    At a high level: samples the (conditional) probabilities 
+    - I dont understand how exactly the conditional probabilites/ corresponding tensors are c
+    onstructed exactly. 
+    - In each step of the loop, takes num_samples many elements (instead of all if num_samples < all)
+    - uses this sample of tensors to get the next projected tensors. I think its this line:
+            
+            projected_tsr = xp.tensordot(projected_tsr, tsr, axes=1).reshape(
+            -1, tsr.shape[2]
+        )
+        where projected_tsr is a tensor with only num_samples many 
+
+    """
+    
     if cp is np:
         xp = np
     else:
@@ -120,7 +170,8 @@ def _sample(
         rng = np.random.default_rng(rng)
 
     bitstrings = None
-    projected_tsr = mps[0].reshape(-1, mps[0].shape[2])
+    projected_tsr = mps[0].reshape(-1, mps[0].shape[2])  # aka before  16 × 4 × 32, after 64 x 32
+    
     for tsr, split in zip(
         mps[1:],
         np.linspace(
@@ -131,6 +182,7 @@ def _sample(
         ),
     ):
         if num_samples >= projected_tsr.shape[0]:
+            # take all 
             indices = xp.arange(projected_tsr.shape[0])
         else:
             probs = xp.linalg.norm(projected_tsr, 2, axis=1)
@@ -147,7 +199,7 @@ def _sample(
                         indices[
                             rng.choice(  # pending cupy issue #8293 to enable cupy equivalent
                                 np.arange(split, projected_tsr.shape[0]),
-                                size=num_samples - split,
+                                size=int(num_samples - split),
                                 replace=False,
                                 p=asnumpy(probs / probs.sum()),
                                 shuffle=False,
@@ -156,11 +208,12 @@ def _sample(
                     )
                 )
             else:
+                # sample from 
                 indices = xp.asarray(
                     rng.choice(
-                        projected_tsr.shape[0],
-                        size=num_samples - split,
-                        replace=False,
+                        projected_tsr.shape[0], # the array to sample from
+                        size=int(num_samples - split), # number of samples drawn
+                        replace=False, # each value can only be selected a single time
                         p=asnumpy(probs / probs.sum()),
                         shuffle=False,
                     )
@@ -170,7 +223,7 @@ def _sample(
         if bitstrings is None:
             bitstrings = indices.reshape(-1, 1)
         else:
-            indices, new_bits = xp.unravel_index(indices, shape)
+            indices, new_bits = xp.unravel_index(indices, shape) # unreval_index 
             bitstrings = xp.concatenate(
                 (bitstrings[indices], new_bits.reshape(-1, 1)), axis=1
             )
@@ -184,6 +237,7 @@ def _sample(
         projected_tsr = xp.tensordot(projected_tsr, tsr, axes=1).reshape(
             -1, tsr.shape[2]
         )
+
     projected_tsr = xp.abs(projected_tsr.reshape(-1))
     argmax = xp.argmax(projected_tsr)
     if len(mps) != 1:

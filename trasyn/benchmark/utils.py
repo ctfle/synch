@@ -30,6 +30,8 @@ def fit_and_plot_with_scipy(n: list[int | float], error: NDArray, d_error: NDArr
     def _func(x, a, b):
         return b * np.exp(a*x)
 
+    n, d_error, error = filter_for_zero_error(n, d_error, error)
+
     popt, pcov = scipy.optimize.curve_fit(_func, n, 1/error, sigma=(1/error**2 *d_error))
     perr = np.sqrt(np.diag(pcov))
     perr_prop =  1/popt[0]**2 * perr[0]
@@ -37,6 +39,37 @@ def fit_and_plot_with_scipy(n: list[int | float], error: NDArray, d_error: NDArr
              label=f'$n = ({np.round(1/popt[0],2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon)$',
              color=color)
 
+
+def fit_raw_data(n: list[int |float], error: NDArray, color: str):
+
+    pairs = np.array(sorted(zip(n, error)))
+    n, error = zip(*pairs)
+    n = np.array(n)
+    error = np.array(error)
+    def _func(x, a, b):
+        return b * np.exp(a*x)
+
+    popt, pcov = scipy.optimize.curve_fit(_func, n, 1/error)
+    perr = np.sqrt(np.diag(pcov))
+    perr_prop =  1/popt[0]**2 * perr[0]
+    plt.plot(sorted(n), sorted(_func(n, *popt)), '--',
+             label=f'$n = ({np.round(1/popt[0],2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon)$',
+             color=color)
+
+
+
+
+def filter_for_zero_error(budget, d_error, error):
+    drop_indices = []
+    for index, (b, d, e) in enumerate(zip(budget, d_error, error)):
+        if np.allclose(d,0.0) or np.allclose(e, 0.0):
+            drop_indices.append(index)
+
+    budget = [val for i, val in enumerate(budget) if i not in drop_indices]
+    d_error = [val for i, val in enumerate(d_error) if i not in drop_indices]
+    error = [val for i, val in enumerate(error) if i not in drop_indices]
+
+    return np.array(budget), np.array(d_error), np.array(error)
 
 def get_mean_and_std(
     data: dict[float | int, list[float]], evaluation_points: list[float | int]
@@ -52,6 +85,95 @@ def get_mean_and_std(
             means.append(np.mean(data_eval))
 
     return np.array(evals), np.array(means), np.array(stds)
+
+
+def get_median_and_errors(
+    data: dict[float | int, list[float]], evaluation_points: list[float | int]
+) -> tuple[NDArray, NDArray, list[NDArray]]:
+    medians = []
+    stds_low = []
+    stds_high = []
+    evals = []
+    for eval in evaluation_points:
+        data_eval = data.get(eval, None)
+        if data_eval is not None:
+            evals.append(eval)
+            median, low_err, high_err = get_median_and_skewed_error(data_eval)
+            stds_low.append(low_err)
+            stds_high.append(high_err)
+            medians.append(median)
+
+    return np.array(evals), np.array(medians), [np.array(stds_low), np.array(stds_high)]
+
+
+def get_median_and_skewed_error(data):
+    median = np.median(data)
+    low, high = np.percentile(data, [16, 84])
+    low_err = median - low
+    high_err = high - median
+
+    return median, low_err, high_err
+
+
+def get_low_err(data):
+    median = np.median(data)
+    low, _ = np.percentile(data, [16, 84])
+    return median - low
+
+
+def get_high_err(data):
+    median = np.median(data)
+    _, high = np.percentile(data, [16, 84])
+    return high - median
+
+
+def rescale_costs(
+    error_data: list[float],
+    seqs_str: list[str],
+    budget: float | int,
+    costs: dict[str, float]
+) -> dict[int | float, list[float]]:
+    """ Sorts the data into new buckets """
+    errors = {}
+    for error, seq  in zip(error_data, seqs_str):
+        total_cost = eval_cost(seq, costs)
+        if total_cost > budget:
+            if total_cost not in errors:
+                errors[total_cost] = [error]
+            else:
+                errors[total_cost].append(error)
+
+        else:
+            if budget not in errors:
+                errors[budget] = [error]
+            else:
+                errors[budget].append(error)
+
+    return errors
+
+
+def eval_cost(seq: str, costs: dict[str, float]):
+    total_cost = 0
+    for gate, cost  in costs.items():
+        total_cost += seq.count(gate) * cost
+
+    return total_cost
+
+
+def merge(a: dict[int| float, list], b: dict[int | float, list]):
+    all_keys = set(a) | set(b)
+    return {key: a.get(key, []) + b.get(key, []) for key in all_keys}
+
+
+def unfold(data: dict[int | list[float]]):
+    key_list = []
+    val_list = []
+    for key, val in data.items():
+        for v in val:
+            key_list.append(key)
+            val_list.append(v)
+
+    return key_list, val_list
 
 
 def analyse_sequence(seqs: list[str], gates: list[str]) -> list[list[int]]:

@@ -6,14 +6,14 @@ num_samples = [100, 1000, 10_000, 20_000, 30_000, 40_000]# 100000]
 dirs = [f"./benchmark_results_100_seed_42_num_attempts_5_num_samples_{n}" for n in num_samples]
 colors = ["red", "blue", "green", "black"]
 labels = [f"{n}" for n in num_samples]
-gate_sets_dir = "tshxyz_tequiv_medium"
+gate_sets_dir ="tqshxyz_tequiv_medium_cost_2.5" # "tshxyz_tequiv_medium" 
 
-for budget, color in zip([10,14,16,20], colors):
+for budget, color in zip([14, 16, 20], colors):
     if budget == 20:
-        num_samples = [100, 1000, 10_000, 20_000, 30_000, 40_000]
+        num_samples = [100, 1000, 10_000]
     else:
         num_samples = [100, 1000, 10_000, 20_000]
-    
+
     error_data = {}
     for dir, n in zip(dirs, num_samples):
 

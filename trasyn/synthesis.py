@@ -345,7 +345,13 @@ class Sythesiser:
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
             #print(budget)
             mps = self.get_sequence_of_tensors(budget)
-            mps = _trace_target_unitary(mps, target_unitary)
+            # print("Before")
+            # for m in mps:
+            #     print(m.shape)
+            mps = _trace_target_unitary(mps, target_unitary) # shape of  changes from (2 x N x 2) (2 x N' x 2) to (1 x N x 4) (4 x N' x 1)
+            # print("After")
+            # for m in mps:
+            #     print(m.shape)
             n_samples = self.get_num_samples(mps, budget)
             while n_samples:
                 try:
@@ -353,7 +359,7 @@ class Sythesiser:
                     break
                 except MemError:
                     n_samples = int(n_samples * 0.9)
-
+            
             fidelity /= 2
             # TODO: this makes no sense. Fidelity should not be > 1
             fidelity = min(fidelity, 1)

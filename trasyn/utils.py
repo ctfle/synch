@@ -180,3 +180,40 @@ def random_unitary_2x2():
     Q = Q * (D / np.abs(D))
 
     return Q
+
+
+def count_t_equiv(seqstr):
+    """Count T-equivalent gates: t=1, q=2, cliffords=0"""
+    t_count = seqstr.count("t")
+    q_count = seqstr.count("q")
+    return t_count + 2.5 * q_count
+
+
+def replace_and_drop(duplicates: dict[str, str], old: str, new: str) -> dict[str, str]:
+    drop = []
+    for i, (key, value) in enumerate(duplicates.items()):
+        replaced_value = value.replace(old, new)
+        duplicates[key] = replaced_value
+        if key == replaced_value:
+            drop.append(key)
+
+    # drop the entries where key == value
+    for key in drop:
+        duplicates.pop(key)
+    new_dupl = {}
+    for key, value in duplicates.items():
+        if len(value) < len(key):
+            new_dupl[key] = value
+        if len(value) > len(key):
+            new_dupl[value] = key
+        if len(value) == len(key):
+            continue
+
+    return new_dupl
+
+
+def replace(sequences: list[str], old: str, new: str) -> list[str]:
+    for i, seq in enumerate(sequences):
+        sequences[i] = seq.replace(old, new)
+
+    return sequences

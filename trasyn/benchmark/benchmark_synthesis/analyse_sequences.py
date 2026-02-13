@@ -9,10 +9,10 @@ from trasyn.benchmark.utils import (
 )
 
 
-dir = "benchmark_results_1000"
+dir = "benchmark_results_100_seed_42_num_attempts_5_varying_num_samples" #"benchmark_results_1000"
 colors = ["red", "blue", "green"]
 labels = ["T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)", "T"]
-gate_sets = ["tqshxyz_tequiv_medium_cost_2.5", "tshxyz_tequiv_medium"]
+gate_sets = ["tqshxyz_tequiv_medium_cost_2.5_large_num_samples", "tshxyz_tequiv_medium"]
 # gate_set_cost_3 = "tqshxyz_tequiv_medium_cost_3"
 # gate_set_cost_2 = "tqshxyz_tequiv_medium"
 # gate_set_cost_25 = "tqshxyz_tequiv_medium_cost_2.5"
