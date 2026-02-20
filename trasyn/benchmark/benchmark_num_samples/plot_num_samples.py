@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 from trasyn.benchmark.utils import get_mean_and_std, extract_budget_files
 
 num_samples = [100, 1000, 10_000, 20_000, 30_000, 40_000]# 100000]
-dirs = [f"./benchmark_results_100_seed_42_num_attempts_5_num_samples_{n}" for n in num_samples]
+dirs = [f"./benchmark_results_100_seed_42_num_attempts_5_num_samples_{n}_max_partition_value_10" for n in num_samples]
 colors = ["red", "blue", "green", "black"]
 labels = [f"{n}" for n in num_samples]
-gate_sets_dir ="tqshxyz_tequiv_medium_cost_2.5" # "tshxyz_tequiv_medium" 
+gate_sets_dir ="merged/tqshxyz_tequiv_large_cost_2.5_all" # "tshxyz_tequiv_medium" 
 
-for budget, color in zip([14, 16, 20], colors):
+for budget, color in zip([ 13], colors):
     if budget == 20:
         num_samples = [100, 1000, 10_000]
     else:

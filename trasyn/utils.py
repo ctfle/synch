@@ -3,6 +3,7 @@ import os
 import subprocess
 from collections.abc import Generator, Sequence
 from functools import lru_cache
+from typing import Callable
 
 import numpy as np
 import psutil
@@ -121,6 +122,10 @@ def can_partition_with_multiples(target: float, numbers: list[float], tol=1e-8) 
                     dp[s + num] = True
 
     return dp[target_int]
+
+
+def find_index(lst: list, pred: Callable) -> list:
+    return [i for i, x in enumerate(lst) if pred(x)]
 
 
 def get_available_memory(gpu: bool = False) -> int:

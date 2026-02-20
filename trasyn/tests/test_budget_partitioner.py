@@ -10,24 +10,42 @@ class TestBudgetPartitioner:
         )
         partition = budget.partition()
         assert partition == [[0.0],
-                 [1.0],
-                 [2.0],
-                 [2.5],
-                 [3.0],
-                 [3.5],
-                 [4.0],
-                 [4.5],
-                 [5.0],
-                 [2.5, 3.0],
-                 [5.0, 1.0],
-                 [2.5, 4.0],
-                 [5.0, 2.0],
-                 [2.5, 5.0],
-                 [5.0, 3.0],
-                 [3.5, 5.0],
-                 [5.0, 4.0],
-                 [4.5, 5.0],
-                 [5.0, 5.0]]
+                             [1.0],
+                             [2.0],
+                             [2.5],
+                             [3.0],
+                             [3.5],
+                             [4.0],
+                             [4.5],
+                             [5.0],
+                             [2.5, 3.0],
+                             [3.0, 2.5],
+                             [5.0, 1.0],
+                             [1.0, 5.0],
+                             [2.5, 4.0],
+                             [4.0, 2.5],
+                             [5.0, 2.0],
+                             [2.0, 5.0],
+                             [2.5, 5.0],
+                             [5.0, 2.5],
+                             [5.0, 3.0],
+                             [3.0, 5.0],
+                             [3.5, 5.0],
+                             [5.0, 3.5],
+                             [5.0, 4.0],
+                             [4.0, 5.0],
+                             [4.5, 5.0],
+                             [5.0, 4.5],
+                             [5.0, 5.0]]
+
+    def test_ergodic_budgets(self):
+        costs = {"t": 1.0, "q": 2.5}
+        budget = BudgetPartitioner(
+            costs=costs, total_non_clifford_budget=14, max_partition_value=8
+        )
+        partition = budget.ergodic_partition()
+        print(partition)
+        assert False
 
     def test_integer_budgets_3(self):
         costs = {"T": 1.0, "sqrtT": 3.0}
@@ -35,19 +53,21 @@ class TestBudgetPartitioner:
             costs=costs, total_non_clifford_budget=10, max_partition_value=6
         )
         partition = budget.partition()
-        assert partition == [
-            [0],
-            [1],
-            [2],
-            [3],
-            [4],
-            [5],
-            [6],
-            [6.0, 1.0],
-            [6.0, 2.0],
-            [6.0, 3.0],
-            [6.0, 4.0],
-        ]
+        assert partition == [[0],
+                             [1],
+                             [2],
+                             [3],
+                             [4],
+                             [5],
+                             [6],
+                             [6.0, 1.0],
+                             [1.0, 6.0],
+                             [6.0, 2.0],
+                             [2.0, 6.0],
+                             [6.0, 3.0],
+                             [3.0, 6.0],
+                             [6.0, 4.0],
+                             [4.0, 6.0]] 
 
     def test_integer_budgets_2(self):
         costs = {"T": 1.0, "sqrtT": 2.0}
@@ -55,24 +75,56 @@ class TestBudgetPartitioner:
             costs=costs, total_non_clifford_budget=10, max_partition_value=4
         )
         partition = budget.partition()
-        assert partition == [
-            [0],
-            [1],
-            [2],
-            [3],
-            [4],
-            [4.0, 1.0],
-            [4.0, 2.0],
-            [4.0, 3.0],
-            [4.0, 4.0],
-            [4.0, 4.0, 1.0],
-            [4.0, 4.0, 2.0],
-        ]
-
+        assert partition ==[[0],
+                             [1],
+                             [2],
+                             [3],
+                             [4],
+                             [4.0, 1.0],
+                             [1.0, 4.0],
+                             [4.0, 2.0],
+                             [2.0, 4.0],
+                             [4.0, 3.0],
+                             [3.0, 4.0],
+                             [4.0, 4.0],
+                             [4.0, 4.0, 1.0],
+                             [4.0, 1.0, 4.0],
+                             [1.0, 4.0, 4.0],
+                             [4.0, 4.0, 2.0],
+                             [4.0, 2.0, 4.0],
+                             [2.0, 4.0, 4.0]]
+        
+    def test_integer_budgets_without_permutations(self):
+        costs = {"T": 1.0, "sqrtT": 2.0}
+        budget = BudgetPartitioner(
+            costs=costs, total_non_clifford_budget=10,
+            max_partition_value=4, 
+        )
+        partition = budget.partition()
+        assert partition ==[[0],
+                             [1],
+                             [2],
+                             [3],
+                             [4],
+                             [4.0, 1.0],
+                             [1.0, 4.0],
+                             [4.0, 2.0],
+                             [2.0, 4.0],
+                             [4.0, 3.0],
+                             [3.0, 4.0],
+                             [4.0, 4.0],
+                             [4.0, 4.0, 1.0],
+                             [4.0, 1.0, 4.0],
+                             [1.0, 4.0, 4.0],
+                             [4.0, 4.0, 2.0],
+                             [4.0, 2.0, 4.0],
+                             [2.0, 4.0, 4.0]]
+    
     def test_partitioning(self):
         costs = {"T": 1.0}
         budget = BudgetPartitioner(
-            costs=costs, total_non_clifford_budget=10, max_partition_value=5, minimize_partition_count=False
+            costs=costs, total_non_clifford_budget=10, max_partition_value=5, 
+            minimize_partition_count=False
         )
         partition = budget.partition()
         for part in partition:
@@ -81,12 +133,27 @@ class TestBudgetPartitioner:
                 assert all([(p > costs["T"] * 2) is False for p in part])
 
         budget = BudgetPartitioner(
-            costs=costs, total_non_clifford_budget=10, max_partition_value=5, minimize_partition_count=True
+            costs=costs, total_non_clifford_budget=10, max_partition_value=5, 
+            minimize_partition_count=True
         )
         # with minimize we reduce the number of partitions
         minimized = budget.partition()
-        assert minimized == [[0], [1], [2], [3], [4], [5.0], [4.0, 2.0], [5.0, 2.0], 
-                             [4.0, 4.0], [5.0, 4.0], [4.0, 4.0, 2.0]]
+        assert minimized == [[0],
+                             [1],
+                             [2],
+                             [3],
+                             [4],
+                             [5.0],
+                             [4.0, 2.0],
+                             [2.0, 4.0],
+                             [5.0, 2.0],
+                             [2.0, 5.0],
+                             [4.0, 4.0],
+                             [5.0, 4.0],
+                             [4.0, 5.0],
+                             [4.0, 4.0, 2.0],
+                             [4.0, 2.0, 4.0],
+                             [2.0, 4.0, 4.0]] 
 
     @pytest.mark.parametrize("max_partition_value", [1, 2, 3, 4])
     def test_max_partition_value_too_small(self, max_partition_value: int):

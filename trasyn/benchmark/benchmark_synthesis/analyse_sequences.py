@@ -5,14 +5,17 @@ from trasyn.benchmark.utils import (
     get_mean_and_std,
     fit_and_plot,
     analyse_sequence,
-    extract_budget_files,
+    extract_budget_files, unfold, fit_data_lin,
 )
 
 
-dir = "benchmark_results_100_seed_42_num_attempts_5_varying_num_samples" #"benchmark_results_1000"
-colors = ["red", "blue", "green"]
-labels = ["T + sqrtT (cost 2)", "T + sqrtT (cost 2.5)", "T"]
-gate_sets = ["tqshxyz_tequiv_medium_cost_2.5_large_num_samples", "tshxyz_tequiv_medium"]
+dir = "benchmark_results_100_seed_42_num_attempts_5" # varying_num_samples" #"benchmark_results_1000"
+colors = ["blue","red", "green"]
+labels = [ "T + sqrtT (cost 2.5)", "T"]
+gate_sets = ["_max_partition_value=8_test_new_ergodic_partitioner/merged/tqshxyz_tequiv_large_cost_2.5_all", 
+             "_max_partition_value=10_varying_num_samples/tshxyz_tequiv_large"]
+
+#gate_sets = ["tqshxyz_tequiv_medium_cost_2.5_large_num_samples", "tshxyz_tequiv_medium"]
 # gate_set_cost_3 = "tqshxyz_tequiv_medium_cost_3"
 # gate_set_cost_2 = "tqshxyz_tequiv_medium"
 # gate_set_cost_25 = "tqshxyz_tequiv_medium_cost_2.5"
@@ -25,7 +28,7 @@ error_data = {}
 sequences = {}
 budgets = []
 
-load_dir = dir + "/" + gate_sets[0] + "/"
+load_dir = dir + gate_sets[0] + "/"
 for budget, path in extract_budget_files(load_dir):
     with open(path, "rb") as file:
         data = pickle.load(file)
@@ -58,9 +61,12 @@ for budget, sequence_data in sequences.items():
 ratio = np.array(gates_means[1]) / np.array(gates_means[0])
 
 
+budgets, errors = unfold(error_data)
+
+#fit_raw_data_lin(np.array(budgets), np.array(errors), color=color)
+
 
 for g, gate in enumerate(gates):
-    
     plt.errorbar(
         budget_points,
         gates_means[g],
@@ -71,8 +77,9 @@ for g, gate in enumerate(gates):
         color=colors[g],
         ecolor=colors[g],
     )
+    fit_data_lin(budget_points, gates_means[g], color=colors[g])
 
-    plt.plot(budget_points, ratio, "o--")
+    #plt.plot(budget_points, ratio, "o--", label='ratio')
 plt.ylabel("number of gates")
 plt.xlabel("non-clifford budget")
 plt.legend()
@@ -114,7 +121,7 @@ def get_ratio(x):
     if x[0] != 0:
         return x[1] / x[0]
     else:
-        return 10
+        return np.nan
 
 
 gates = ["t", "q"]
@@ -125,6 +132,7 @@ for budget, sequence_data in sequences.items():
     budget_points.append(budget)
     analysed_seqs = analyse_sequence(sequence_data, gates)
     ratio = list(map(get_ratio, analysed_seqs))
+    print(ratio, np.mean(ratio))
     ratio_means.append(np.mean(ratio))
     ratio_std.append(np.std(ratio))
 
@@ -141,6 +149,62 @@ for g, gate in enumerate(gates):
     )
 
 plt.ylabel("(avg. gate occurrence)")
+plt.xlabel("non-clifford budget")
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.legend()
+plt.show()
+
+
+# count cliffords
+gates = ["x", "y", "z", "h", "s"]
+
+for gs, label, color in zip(gate_sets, labels, colors):
+    budget_points = []
+    clifford_means = []
+    clifford_std = []
+    low_err = []
+    upp_err = []
+
+    error_data = {}
+    sequences = {}
+    budgets = []
+    
+    load_dir = dir  + gs + "/"
+    for budget, path in extract_budget_files(load_dir):
+        with open(path, "rb") as file:
+            data = pickle.load(file)
+    
+        budgets.append(budget)
+        error_data[budget] = data["error_data"]
+        sequences[budget] = data["seqstr_data"]
+
+    for budget, sequence_data in sequences.items():
+        budget_points.append(budget)
+        analysed_seqs = analyse_sequence(sequence_data, gates)
+        clifford_count = list(map(sum, analysed_seqs))
+        
+        median = np.median(clifford_count)
+        clifford_means.append(median)
+        low, high = np.percentile(clifford_count, [16, 84])
+        low_err.append(median - low)
+        upp_err.append(high - median)
+        
+    plt.errorbar(
+        budget_points,
+        clifford_means,
+        yerr=[low_err, upp_err],
+        capsize=5,
+        fmt="o-",
+        label=label,
+        color=color,
+        ecolor=color,
+    )
+    fit_data_lin(budget_points, clifford_means, color=color)
+    
+
+plt.ylabel("Clifford count")
 plt.xlabel("non-clifford budget")
 plt.legend()
 plt.grid(True, alpha=0.3)

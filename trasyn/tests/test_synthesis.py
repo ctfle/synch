@@ -27,9 +27,8 @@ def unitary_from_budget(t_budget: int, q_budget: int, total_len: int) -> str:
 class TestSynthesis():
 
     @pytest.mark.parametrize("load_dir, costs", [
-        ("../assets/tqshxyz_tequiv_medium_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
-        ("../assets/tshxyz_tequiv_medium", {"T": 1.0}),
-        ("../assets/tqshxyz_tequiv_medium_cost_2", {"T": 1.0, "sqrtT": 2})
+        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
+        ("../assets/tshxyz_tequiv_large", {"T": 1.0}),
     ])
     @pytest.mark.parametrize("budget", [
         2, 3, 4, 5, 6
@@ -51,9 +50,8 @@ class TestSynthesis():
             assert np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
 
     @pytest.mark.parametrize("load_dir, costs", [
-        ("../assets/tqshxyz_tequiv_medium_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
-        ("../assets/tshxyz_tequiv_medium", {"T": 1.0}),
-        ("../assets/tqshxyz_tequiv_medium_cost_2", {"T": 1.0, "sqrtT": 2})
+        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
+        ("../assets/tshxyz_tequiv_large", {"T": 1.0}),
     ])
     @pytest.mark.parametrize("budget", [
         2, 3, 4, 5

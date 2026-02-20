@@ -1,27 +1,18 @@
 import json
-import os
 import warnings
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from itertools import product
-from math import log
-from multiprocessing import Pool
-from typing import Literal, Sequence, Iterable
+from itertools import product, permutations
+from typing import Literal, Iterable
 from tqdm import tqdm
-from trasyn.utils import can_partition_with_multiples
+
+from trasyn.utils import can_partition_with_multiples, find_index
+from trasyn.sequence_creation.backtrack_sequences import find_unsupported_trajectories, pair_partitions, min_valid_subset
 
 import numpy as np
-
-# from hypothesis.internal.conjecture.shrinking import Collection
-from numpy.random import Generator
 from numpy.typing import NDArray
-from matplotlib import pyplot as plt
-from sympy.physics.quantum.density import fidelity
-
-
 import os
-import pickle
-from pathlib import Path
 
 try:
     import cupy as cp
@@ -34,9 +25,8 @@ except ModuleNotFoundError:
     asnumpy = np.asarray
     MemError = MemoryError
 
-from trasyn.gates import rz, t, u
 from trasyn.mps import _sample, _trace_target_unitary
-from trasyn.utils import distance, get_available_memory, seq2mat
+from trasyn.utils import get_available_memory
 
 ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/assets"
 AVAILABLE_GATE_SETS = [
@@ -75,14 +65,18 @@ class SynthesisResult:
 
 
 class BudgetPartitioner:
-    """Not sure about the factor of 2"""
-
+    """ 
+    Takes responsibility of creating a suitable partitioning. 
+    The partitioning has to be done with care such that every possible seauence can actually be
+    reached when sampling. This is especially important for cases where the costs dict contains 
+    entries which differ in cost.
+    """
     def __init__(
         self,
         costs: dict[str, float],
         total_non_clifford_budget: float,
         max_partition_value: float,
-        minimize_partition_count: bool = True
+        minimize_partition_count: bool = True,
     ):
         self.costs = costs
         self.total_non_clifford_budget = total_non_clifford_budget
@@ -99,6 +93,9 @@ class BudgetPartitioner:
             )
 
     def _verify_max_partition_value(self):
+        """ 
+        This condition arises from ergodicity requirement. Without we cannot sample ergodically.
+        """
         assert self.max_partition_value >= self.max_gate_cost * 2, (
             f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
         )
@@ -135,11 +132,14 @@ class BudgetPartitioner:
         if self.minimize_partition_count:
             budgets = self._minimize_partitioning(budgets)
         
+        budgets = self._ensure_ergodicity(budgets)
+            
+        self._verify_ergodicity(budgets)
+
         return budgets
 
     def _get_integer_partition(self, input: int) -> list[int]:
         # if the total non_clifford budget is int we can call the normal partitioner
-        partition = []
         # partition using as many 2 * max_gate_cost as possible
         if input < self.max_partition_value:
             partition = [input]
@@ -178,6 +178,47 @@ class BudgetPartitioner:
         partition.append(remainder)
         return partition
 
+    def ergodic_partition(self):
+        if self.all_costs_integer:
+            budgets = []
+            for i in range(int(self.total_non_clifford_budget + 1)):
+                budgets.extend(self._get_ergodic_integer_partition(i))
+        else:
+            budgets = []
+            for i in np.arange(0, self.total_non_clifford_budget + 0.5, 0.5):
+                partition = self._get_ergodic_non_integer_partition(i)
+                if len(partition) > 0:
+                    budgets.extend(partition)
+        
+        return budgets       
+    
+    def _get_ergodic_integer_partition(self, total_cost):
+        if total_cost < self.max_partition_value:
+            return [[total_cost]]
+        else:
+            raw_partitions = pair_partitions(total_cost, 1, self.max_partition_value, step=1)
+            _, min_subset = min_valid_subset(raw_partitions, self._is_valid_partition)
+            if min_subset is None:
+                raise ValueError
+            return list(map(list, min_subset))
+
+    def _get_ergodic_non_integer_partition(self, total_cost):
+        partition = []
+        if total_cost < self.max_partition_value:
+            if can_partition_with_multiples(total_cost, self.cost_values):
+                partition = [[total_cost]]
+        else:
+            raw_partitions = pair_partitions(total_cost, 1, self.max_partition_value, step=0.5)
+            _, min_subset = min_valid_subset(raw_partitions, self._is_valid_partition)
+            if min_subset is None:
+                raise ValueError("No ergodic partitioning possible -- increase max_partitioning_value")
+            partition = list(map(list, min_subset))
+        
+        return partition
+
+    def _is_valid_partition(self, partition):
+        return find_unsupported_trajectories(self.costs, partition) == []
+    
     def _minimize_partitioning(self, budgets: list[list[int | float]]) -> list[list[int | float]]:
         """ Minimizes the number of partitions in each element of the input list. """
         new_budgets_partitioning = []
@@ -193,10 +234,106 @@ class BudgetPartitioner:
             new_budgets_partitioning.append(new_budget)
         return new_budgets_partitioning
 
+    def _ensure_ergodicity(self, budgets: list[list[int | float]]) -> list[list[ int | float]]:
+        """ 
+        Modify the partitioning such that each part can hold at least one max-cost gate.
+        This is important so that every existing combination can be reached when sampling
+        Example: Assume  p = [7.5, 2]. p enforces that 2 T gates at the end of the sequence and 
+        completely excludes the case where sqrtT terminates the sequence. In this case we want 
+        p' = [4.5, 5] (and permutations [5, 4.5]). 
+        """
+        new_budgets =  deepcopy(budgets)
+        for budget in new_budgets:
+            if len(budget)==1:
+                continue
+            
+            indices_less = find_index(budget, lambda x: x < 2 * self.max_gate_cost)
+            indices_more = find_index(budget, lambda x: x > 2 * self.max_gate_cost)
+
+            if indices_less and indices_more:
+                # balance it out
+                for less, more in zip(indices_less, indices_more):
+                    diff = budget[more] - 2 * self.max_gate_cost
+                    budget[less] += diff
+                    budget[more] -= diff
+
+        return self._add_permutations(new_budgets)
+
+    def _add_permutations(self, budgets: list[list[int | float]]) -> list[list[int | float]]:
+        """ Add in all the permutations and drop duplicates. """
+        perms = [list(permutation) for budget in budgets for permutation in permutations(budget)]
+
+        # drop duplicates
+        seen = set()
+        out = []
+        for sub in perms:
+            t = tuple(sub) 
+            if t not in seen:
+                seen.add(t)
+                out.append(sub)
+        
+        return out
+
+    def _verify_ergodicity(self, budgets: list[list[int | float]]):
+        """
+        The partitioning needs to be done ergodically meaning any possible multiple of gates must be
+        reachable.
+        For example: partitioning p = [8, 2], cost of sqrtT is 2.5. In this case 4 * 2.5 = 10 would
+        not be reachable with this partitioning. In other words, the partitioning p excludes the
+        case with 4 sqrtT.
+        """
+        self._verify_num_max_gate_cost(budgets)
+        self._verify_each_part_large_enough(budgets)
+
+    def _verify_num_max_gate_cost(self, budgets: list[list[int |float]]):
+        """ 
+        Checks that the gate with max_gate_cost can appear in all possible ways given the total
+        checksum 
+        """
+        for budget in budgets:
+            if len(budget)==1:
+                continue
+            s = sum(budget)
+            if float(s).is_integer():
+                n = s // (2*self.max_gate_cost)
+                max_num = 2* n
+            else:
+                n = (s - self.max_gate_cost) // (2*self.max_gate_cost)
+                max_num = 2 * n + 1
+
+            # compute the max number of appearances each element in the budget allows for
+            possible_appearances = []
+            for element in budget:
+                if float(element).is_integer():
+                    n = element // (2*self.max_gate_cost)
+                    possible_appearances.append(2*n)
+                else:
+                    n =(element - self.max_gate_cost) // (2 * self.max_gate_cost)
+                    possible_appearances.append(2*n +1)
+
+            # the sum of possible_appearances must sum of to max_num
+            assert sum(possible_appearances) == max_num, "partitioning is not ergodic"
+
+    def _verify_each_part_large_enough(self, budgets: list[list[int | float]]):
+        """ 
+        Verifies that each part of the partitioning allows at least one gate with cost 
+        max_gate_cost.
+        """
+        print(budgets)
+        for budget in budgets:
+            if len(budget)==1:
+                continue
+            
+            for part in budget:
+                if part < 2* self.max_gate_cost:
+                    assert not float(part).is_integer()
+                    assert part >= 2.5, f"all parts must be larger {self.max_gate_cost}."
+            
+
     def _adds_to(self, budget_partitioning: list[int | float], value: int | float) -> int | None:
         """
-        Looks into budget_partitioning and checks if value can be added to any element 
-        so that this element is still < self.max_partition_value. Returns the index of the 
+        Looks into budget_partitioning and checks if value can be added to any element
+        so that this element is still < self.max_partition_value. Returns the index of the
         corresponding element or None otherwise.
         """
         index = None
@@ -205,7 +342,7 @@ class BudgetPartitioner:
                 index = i
                 break
         return index
-    
+
     def _original_partitioning(self):
         budgets = [
             [curr_budget + 1]
@@ -289,7 +426,7 @@ class Sythesiser:
          [[1], [2], [3], [4], [3,2], [3,3]]
         Up to max count we can use list with a single entry. Then we need to do combinations.
         """
-        return self.budget_partitioner.partition()
+        return self.budget_partitioner.ergodic_partition()
 
     def get_tensor(self, budget: int):
         """
@@ -345,13 +482,7 @@ class Sythesiser:
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
             #print(budget)
             mps = self.get_sequence_of_tensors(budget)
-            # print("Before")
-            # for m in mps:
-            #     print(m.shape)
-            mps = _trace_target_unitary(mps, target_unitary) # shape of  changes from (2 x N x 2) (2 x N' x 2) to (1 x N x 4) (4 x N' x 1)
-            # print("After")
-            # for m in mps:
-            #     print(m.shape)
+            mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)
             while n_samples:
                 try:
@@ -359,7 +490,7 @@ class Sythesiser:
                     break
                 except MemError:
                     n_samples = int(n_samples * 0.9)
-            
+
             fidelity /= 2
             # TODO: this makes no sense. Fidelity should not be > 1
             fidelity = min(fidelity, 1)

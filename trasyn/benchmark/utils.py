@@ -57,6 +57,38 @@ def fit_raw_data(n: list[int |float], error: NDArray, color: str):
              color=color)
 
 
+def fit_raw_data_log(n: list[int |float], error: NDArray, color: str):
+
+    pairs = np.array(sorted(zip(n, error)))
+    n, error = zip(*pairs)
+    n = np.array(n)
+    error = np.array(error)
+    def _func(x, a, b):
+        return b + a*x
+
+    popt, pcov = scipy.optimize.curve_fit(_func, n, np.log(1/error))
+    perr = np.sqrt(np.diag(pcov))
+    perr_prop = perr[0]
+    plt.plot(sorted(n), sorted(np.exp(_func(n, *popt))), '--',
+             label=f'$n = ({np.round(1/popt[0],2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon) (fit log)$',
+             color=color)
+
+
+def fit_data_lin(x: list[int |float], y: NDArray, color: str):
+
+    pairs = np.array(sorted(zip(x, y)))
+    x, y = zip(*pairs)
+    x = np.array(x)
+    y = np.array(y)
+    def _func(x, a, b):
+        return b + a*x
+
+    popt, pcov = scipy.optimize.curve_fit(_func, x, y)
+    perr = np.sqrt(np.diag(pcov))
+    perr_prop = perr[0]
+    plt.plot(sorted(x), sorted(_func(x, *popt)), '--', label={f"$({np.round(popt[0],2)} \pm {np.round(perr_prop,2)})n+{np.round(popt[1],2)}$"},
+             color=color)
+
 
 
 def filter_for_zero_error(budget, d_error, error):
@@ -294,11 +326,13 @@ def benchmark_budget(
 def get_suitable_num_samples(budget: int):
     """ These number of samples are obtained by empirically checking convergence
     of the corresponding errors. """
-    if budget <= 10:
+    if budget <= 5:
         num_samples = 1000
-    elif budget > 10 and budget < 17:
-        num_samples = 10_000
+    elif budget >5 and budget < 10:
+        num_samples = 3000
+    elif budget >= 10 and budget < 15:
+        num_samples = 10_000 + 5000 * (budget - 10)
     else:
-        num_samples = 20_000 + 10_000 * (budget - 17)
+        num_samples = 35_000 + 10_000 * (budget - 15)
 
     return num_samples

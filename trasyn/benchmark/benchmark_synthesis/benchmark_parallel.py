@@ -112,14 +112,13 @@ if __name__ == "__main__":
     n_gpus = cp.cuda.runtime.getDeviceCount()
     n_unitaries = 100
     unitaries = generate_unitaries(n_unitaries)
-    min_budget = 17.5
+    min_budget = 1
     max_budget = 22
     num_attempts = 5
-    save_dir = f"./benchmark_results_{n_unitaries}_seed_{SEED}_num_attempts_{num_attempts}_varying_num_samples"
-    gate_set_cost_3 = "tqshxyz_tequiv_medium_cost_3"  # "tqshxyz_tequiv_short_cost_3"
-    gate_set_cost_2 = "tqshxyz_tequiv_medium_cost_2"  # "tqshxyz_tequiv_short"
-    gate_set_cost_25 = "tqshxyz_tequiv_medium_cost_2.5"
-    gate_set_t = "tshxyz_tequiv_medium"
+    max_partition_value = 10
+    save_dir = f"./benchmark_results_{n_unitaries}_seed_{SEED}_num_attempts_{num_attempts}_max_partition_value={max_partition_value}_varying_num_samples"
+    gate_set_cost_25 = "merge/tqshxyz_tequiv_large_cost_2.5_all"
+    gate_set_t = "tshxyz_tequiv_large"
 
     budgets = np.arange(min_budget, max_budget, 0.5)
     for nc_budget in tqdm(budgets, desc="nc budget"):
@@ -144,8 +143,9 @@ if __name__ == "__main__":
                 seed=SEED,
                 costs={"T": 1.0, "sqrtT": 2.5},
                 num_attempts=num_attempts,
-                num_samples=3 * get_suitable_num_samples(budget=nc_budget),
-                num_gpus=n_gpus
+                num_samples=2*get_suitable_num_samples(budget=nc_budget),
+                num_gpus=n_gpus,
+                max_partition_value=max_partition_value
             ),
         ]
 

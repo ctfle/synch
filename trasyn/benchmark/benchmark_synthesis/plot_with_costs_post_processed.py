@@ -4,7 +4,7 @@ import numpy as np
 
 from trasyn.benchmark.utils import get_mean_and_std, fit_and_plot, extract_budget_files, \
     fit_and_plot_with_scipy, rescale_costs, merge, unfold, fit_raw_data, get_median_and_errors, \
-    get_low_err, get_high_err
+    get_low_err, get_high_err, fit_raw_data_log
 
 dir = "benchmark_results_100_seed_42_num_attempts_5_varying_num_samples"  # "./benchmark_results_1000"
 colors = ["red", "blue", "green"]
@@ -53,7 +53,8 @@ for gs, color, label in zip(gate_sets_dir, colors, labels):
         plt.errorbar(bin_centers, y_binned,
                      yerr=[low_err, high_err],
                      fmt='o-', capsize=3, label=label)
-        fit_raw_data(np.array(budgets), np.array(errors), color=color)
+        #fit_raw_data(np.array(budgets), np.array(errors), color=color)
+        fit_raw_data_log(np.array(budgets), np.array(errors), color=color)
 
     else:
         budgets, error_means, error_stds = get_median_and_errors(error_data, sorted(list(error_data.keys())))
@@ -69,7 +70,8 @@ for gs, color, label in zip(gate_sets_dir, colors, labels):
             ecolor=color,
         )
         budgets, errors = unfold(error_data)
-        fit_raw_data(np.array(budgets), np.array(errors), color=color)
+        #fit_raw_data(np.array(budgets), np.array(errors), color=color)
+        fit_raw_data_log(np.array(budgets), np.array(errors), color=color)
         #plt.scatter(budgets, 1/np.array(errors))
         #fit_and_plot_with_scipy(budgets,error_means,error_stds,color)
 
