@@ -3,7 +3,7 @@ import random
 import numpy as np
 from numpy.typing import NDArray
 import pytest
-from trasyn.synthesis import Sythesiser, BudgetPartitioner
+from trasyn.synthesis import Sythesiser, BudgetPartitioner, ErgodicPartitioner
 from trasyn.utils import random_unitary_2x2, seq2mat, distance
 
 
@@ -27,18 +27,20 @@ def unitary_from_budget(t_budget: int, q_budget: int, total_len: int) -> str:
 class TestSynthesis():
 
     @pytest.mark.parametrize("load_dir, costs", [
-        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
-        ("../assets/tshxyz_tequiv_large", {"T": 1.0}),
+        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"t": 1.0, "q": 2.5}),
+        ("../assets/merged/tqshxyz_tequiv_large_cost_2.5_all", {"t": 1.0, "q": 2.5}),
+        ("../assets/tshxyz_tequiv_large", {"t": 1.0}),
+        ("../assets/filtered/merged/tqshxyz_tequiv_large_cost_2.5_max_num_sqrtt_1", {"t": 1.0, "q": 2.5})
     ])
     @pytest.mark.parametrize("budget", [
-        2, 3, 4, 5, 6
+        2, 3, 4, 5, 6, 7
     ])
     def test_synthesis(self, budget, load_dir, costs):
         """
         Test that the synthesis actually produces unitaries that are as close to the target
         unitary as the synthesis proclaims.
         """
-        partitioner = BudgetPartitioner(
+        partitioner = ErgodicPartitioner(
             max_partition_value=5, total_non_clifford_budget=budget,
             costs=costs
         )
@@ -48,13 +50,13 @@ class TestSynthesis():
             target_unitary = random_unitary_2x2()
             result = syn.sample_and_synthesize(target_unitary, verbose=False)
             assert np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
-
+        
     @pytest.mark.parametrize("load_dir, costs", [
-        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"T": 1.0, "sqrtT": 2.5}),
-        ("../assets/tshxyz_tequiv_large", {"T": 1.0}),
+        ("../assets/tqshxyz_tequiv_large_cost_2.5", {"t": 1.0, "q": 2.5}),
+        ("../assets/tshxyz_tequiv_large", {"t": 1.0}),
     ])
     @pytest.mark.parametrize("budget", [
-        2, 3, 4, 5
+        2, 3, 4, 5, 6, 7
     ])
     def test_reverse_engineer_synthesis(self, budget, load_dir, costs):
         """
@@ -63,17 +65,17 @@ class TestSynthesis():
         t + Clifford, the synthesiser should find it (or a variation using duplicates). Thus, error
         should be very small.
         """
-
         target_unitary_seq = unitary_from_budget(t_budget=budget, q_budget=0, total_len=10)
         target_unitary = seq2mat(target_unitary_seq)
-        partitioner = BudgetPartitioner(
+        partitioner = ErgodicPartitioner(
             max_partition_value=5, total_non_clifford_budget=budget,
             costs=costs
         )
         syn = Sythesiser(partitioner=partitioner, load_dir=load_dir)
-
+        
         result = syn.sample_and_synthesize(target_unitary, verbose=False)
-        np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
+        assert np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
+        
         assert np.allclose(result.error, 0.0, atol=1e-7)
 
 
