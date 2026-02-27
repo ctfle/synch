@@ -261,7 +261,8 @@ class ErgodicPartitioner(BudgetPartitioner):
             raw_partitions = pair_partitions(total_cost, 1, self.max_partition_value, step=1)
             _, min_subset = min_valid_subset(raw_partitions, self._is_valid_partition)
             if min_subset is None:
-                raise ValueError
+                raise ValueError(
+                    "No ergodic partitioning possible -- increase max_partitioning_value")
             return list(map(list, min_subset))
 
     def _get_ergodic_non_integer_partition(self, total_cost):
