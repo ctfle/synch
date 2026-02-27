@@ -4,7 +4,7 @@ import numpy as np
 import scipy.optimize
 from tqdm import tqdm
 import pickle
-from trasyn.synthesis import BudgetPartitioner, Sythesiser
+from trasyn.synthesis import BudgetPartitioner, Sythesiser, ErgodicPartitioner
 from trasyn.utils import random_unitary_2x2
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
@@ -245,15 +245,13 @@ def benchmark_on_random_unitaries(
     max_partition_value: int = 5,
     num_attempts: int = 5,
     num_samples: int | None = None,
-    minimize_partitioning: bool = True,
 ):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
     for nc_budget in tqdm(budgets, desc="nc budget", position=0):
-        partitioner = BudgetPartitioner(
+        partitioner = ErgodicPartitioner(
             max_partition_value=max_partition_value, total_non_clifford_budget=nc_budget, costs=costs,
-            minimize_partition_count=minimize_partitioning
         )
         syn = Sythesiser(partitioner=partitioner,
                          load_dir=load_dir,
@@ -283,22 +281,15 @@ def benchmark_on_random_unitaries(
 def benchmark_budget(
     unitaries: list[NDArray],
     budget: int | float,
-    costs: dict[str, float],
+    partitioner: BudgetPartitioner,
     load_dir: str,
     seed: int,
     save_dir: str = "./benchmark_results",
-    max_partition_value: int = 5,
     num_attempts: int = 5,
     num_samples: int | None = None,
-    minimize_partitioning: bool = True
 ):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
-
-    partitioner = BudgetPartitioner(
-        max_partition_value=max_partition_value, total_non_clifford_budget=budget, costs=costs,
-        minimize_partition_count=minimize_partitioning
-    )
     syn = Sythesiser(partitioner=partitioner,
                      load_dir=load_dir,
                      num_attempts= num_attempts,
@@ -306,17 +297,20 @@ def benchmark_budget(
 
     errors = []
     seqs = []
+    target_unitaries = []
     for target_unitary in tqdm(unitaries, desc="unitaries", leave=False, position=1):
         result = syn.sample_and_synthesize(target_unitary, verbose=False)
         errors.append(result.error)
         seqs.append(result.seqstr)
+        target_unitaries.append(result.target_unitary)
 
     # Save per-budget checkpoint
     budget_data = {
         "error_data": errors,
         "seqstr_data": seqs,
         "n_unitaries_per_budget": len(unitaries),
-        "seed": seed
+        "seed": seed,
+        "target_unitaries": target_unitaries
     }
     pickle.dump(
         budget_data, open(f"{save_dir}/budget_{budget}_num_samples_{num_samples}_results.pkl", "wb")
