@@ -26,16 +26,16 @@ nonclifford_gates_merge_from = "t"
 # Original maximum sequence length
 MAX_LEN = 6
 # Max T-equivalent to process (covers up to length=4 with q's)
-MAX_LEN = 10  # max value = 6*q = 15 T-equivalent.
+MAX_LEN = 7.5  # max value = 6*q = 15 T-equivalent.
 
 # Original directory (input)
-ORIG_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5/"
+ORIG_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/filtered/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5_max_num_sqrtt_1/"
 # Dir to merge from
 MERGE_FROM_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gates_merge_from}{clifford_gates}_large/"
 MERGE_FROM_SEQ = MERGE_FROM_DIR + "sequences_11.json"
 MERGE_FROM_DUP = MERGE_FROM_DIR + "duplicates_11.json"
 # New directory for T-equivalent grouping (output)
-NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/merged/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5_all/"
+NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/filtered/merged/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5_max_num_sqrtt_1/"
 os.makedirs(NEW_DIR, exist_ok=True)
 
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         merge_from_duplicates = json.load(file)
 
     # load the corresponding files
-    for cost in tqdm(np.arange(10, MAX_LEN +0.5, 0.5)):
+    for cost in tqdm(np.arange(0.0, MAX_LEN +0.5, 0.5)):
         with open(f"{ORIG_DIR}sequences_{cost}.json", "r", encoding="utf-8") as file:
             sequences = json.load(file)
         with open(f"{ORIG_DIR}duplicates_{cost}.json", "r", encoding="utf-8") as file:
