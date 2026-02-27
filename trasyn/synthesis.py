@@ -6,8 +6,14 @@ from itertools import product, permutations
 from typing import Literal, Iterable
 
 from abc import abstractmethod, ABC
-from trasyn.utils import can_partition_with_multiples, distance, seq2mat
-from trasyn.sequence_creation.backtrack_sequences import find_unsupported_trajectories, pair_partitions, min_valid_subset
+from trasyn.utils import (
+    can_partition_with_multiples,
+    distance,
+    seq2mat,
+    tuple_partitions,
+    find_unsupported_trajectories,
+    min_valid_subset,
+)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -65,7 +71,6 @@ class SynthesisResult:
 
 
 class BudgetPartitioner(ABC):
-    
     def __init__(
         self,
         costs: dict[str, float],
@@ -77,7 +82,7 @@ class BudgetPartitioner(ABC):
         self.max_partition_value = max_partition_value
         self._verify_costs()
         self._verify_max_partition_value()
-        
+
     def _verify_costs(self):
         assert np.allclose(self.min_gate_cost, 1), "min cost should be set to 1."
         for id, cost in self.costs.items():
@@ -87,13 +92,13 @@ class BudgetPartitioner(ABC):
             assert len(id) == 1, "Cost id must be single char. "
 
     def _verify_max_partition_value(self):
-        """ 
+        """
         This condition arises from ergodicity requirement. Without we cannot sample ergodically.
         """
         assert self.max_partition_value >= self.max_gate_cost * 2, (
             f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
         )
-        
+
     @property
     def cost_values(self) -> list[float]:
         return list(self.costs.values())
@@ -112,13 +117,14 @@ class BudgetPartitioner(ABC):
 
     @abstractmethod
     def partition(self) -> list[list[int | float]]:
-        """ Implements the partitioning. """
-    
-    
+        """Implements the partitioning."""
+
+
 class FilteredBudgetPartitioner(BudgetPartitioner):
-    """ 
+    """
     Partitioner that partitions into integers with at most one non-integer component.
     """
+
     def partition(self) -> list[list[float | int]]:
         if self.all_costs_integer:
             budgets = [
@@ -131,7 +137,7 @@ class FilteredBudgetPartitioner(BudgetPartitioner):
                 partition = self._get_non_integer_partition(i)
                 if len(partition) > 0:
                     budgets.append(partition)
-        
+
         budgets = self._minimize_partitioning(budgets)
         self._add_permutations(budgets)
         self._verify_partition(budgets)
@@ -177,11 +183,13 @@ class FilteredBudgetPartitioner(BudgetPartitioner):
 
         partition.append(remainder)
         return partition
-    
-    def _minimize_partitioning(self, budgets: list[list[int | float]]) -> list[list[int | float]]:
-        """ Minimizes the number of partitions in each element of the input list. """
+
+    def _minimize_partitioning(
+        self, budgets: list[list[int | float]]
+    ) -> list[list[int | float]]:
+        """Minimizes the number of partitions in each element of the input list."""
         new_budgets_partitioning = []
-        for budget_partition in budgets:       
+        for budget_partition in budgets:
             new_budget = [budget_partition[0]]
             for part in budget_partition[1:]:
                 ind = self._adds_to(new_budget, part)
@@ -189,28 +197,34 @@ class FilteredBudgetPartitioner(BudgetPartitioner):
                     new_budget[ind] += part
                 else:
                     new_budget.append(part)
-            
+
             new_budgets_partitioning.append(new_budget)
         return new_budgets_partitioning
 
-    def _add_permutations(self, budgets: list[list[int | float]]) -> list[list[int | float]]:
-        """ Add in all the permutations and drop duplicates. """
-        perms = [list(permutation) for budget in budgets for permutation in permutations(budget)]
+    def _add_permutations(
+        self, budgets: list[list[int | float]]
+    ) -> list[list[int | float]]:
+        """Add in all the permutations and drop duplicates."""
+        perms = [
+            list(permutation)
+            for budget in budgets
+            for permutation in permutations(budget)
+        ]
 
         # drop duplicates
         seen = set()
         out = []
         for sub in perms:
-            t = tuple(sub) 
+            t = tuple(sub)
             if t not in seen:
                 seen.add(t)
                 out.append(sub)
-        
+
         return out
 
     def _verify_partition(self, budgets: list[list[int | float]]):
         for budget in budgets:
-            if len(budget)==1:
+            if len(budget) == 1:
                 continue
             non_integer_parts = 0
             for part in budget:
@@ -218,7 +232,9 @@ class FilteredBudgetPartitioner(BudgetPartitioner):
                     non_integer_parts += 1
             assert non_integer_parts <= 1
 
-    def _adds_to(self, budget_partitioning: list[int | float], value: int | float) -> int | None:
+    def _adds_to(
+        self, budget_partitioning: list[int | float], value: int | float
+    ) -> int | None:
         """
         Looks into budget_partitioning and checks if value can be added to any element
         so that this element is still < self.max_partition_value. Returns the index of the
@@ -233,13 +249,13 @@ class FilteredBudgetPartitioner(BudgetPartitioner):
 
 
 class ErgodicPartitioner(BudgetPartitioner):
-    """ 
-    Takes responsibility of creating a suitable partitioning. 
+    """
+    Takes responsibility of creating a suitable partitioning.
     The partitioning has to be done with care such that every possible seauence can actually be
-    reached when sampling. This is especially important for cases where the costs dict contains 
+    reached when sampling. This is especially important for cases where the costs dict contains
     entries which differ in cost.
     """
-    
+
     def partition(self) -> list[list[int | float]]:
         if self.all_costs_integer:
             budgets = []
@@ -258,11 +274,17 @@ class ErgodicPartitioner(BudgetPartitioner):
         if total_cost < self.max_partition_value:
             return [[total_cost]]
         else:
-            raw_partitions = pair_partitions(total_cost, 1, self.max_partition_value, step=1)
-            _, min_subset = min_valid_subset(raw_partitions, self._is_valid_partition)
-            if min_subset is None:
-                raise ValueError(
-                    "No ergodic partitioning possible -- increase max_partitioning_value")
+            min_subset = None
+            length = 1
+            while min_subset is None:
+                length += 1
+                raw_partitions = tuple_partitions(
+                    total_cost, 1, self.max_partition_value, length=length, step=1
+                )
+                _, min_subset = min_valid_subset(
+                    raw_partitions, self._is_valid_partition
+                )
+
             return list(map(list, min_subset))
 
     def _get_ergodic_non_integer_partition(self, total_cost):
@@ -271,11 +293,17 @@ class ErgodicPartitioner(BudgetPartitioner):
             if can_partition_with_multiples(total_cost, self.cost_values):
                 partition = [[total_cost]]
         else:
-            raw_partitions = pair_partitions(total_cost, 1, self.max_partition_value, step=0.5)
-            _, min_subset = min_valid_subset(raw_partitions, self._is_valid_partition)
-            if min_subset is None:
-                raise ValueError(
-                    "No ergodic partitioning possible -- increase max_partitioning_value")
+            min_subset = None
+            length = 1
+            while min_subset is None:
+                length += 1
+                raw_partitions = tuple_partitions(
+                    total_cost, 1, self.max_partition_value, length=length, step=0.5
+                )
+                _, min_subset = min_valid_subset(
+                    raw_partitions, self._is_valid_partition
+                )
+
             partition = list(map(list, min_subset))
 
         return partition
@@ -371,7 +399,7 @@ class Sythesiser:
         bitstring = None
         result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
-            #print(budget)
+            # print(budget)
             mps = self.get_sequence_of_tensors(budget)
             mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)
@@ -391,9 +419,9 @@ class Sythesiser:
                 print(f"Error:{error}, Fidelity: {fidelity}")
             if error < result.error:
                 result = SynthesisResult(
-                    error=error, 
+                    error=error,
                     seqstr=self.get_sequence_str(bitstring, budget),
-                    target_unitary=target_unitary
+                    target_unitary=target_unitary,
                 )
             if self.error_threshold is not None and error <= self.error_threshold:
                 break
@@ -407,7 +435,9 @@ class Sythesiser:
                 f"Error threshold {self.error_threshold} is not reached "
                 f"by the lowest error found: {result.error}."
             )
-        assert np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
+        assert np.allclose(
+            distance(target_unitary, seq2mat(result.seqstr)), result.error
+        )
 
     def get_sequence_str(self, indices: Iterable[int], budget: Iterable[int]) -> str:
         """Get the sequences of gates as str associated with the budget and the indices"""

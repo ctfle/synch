@@ -40,7 +40,6 @@ os.makedirs(NEW_DIR, exist_ok=True)
 
 
 if __name__ == "__main__":
-
     # load sequences and duplicates to merge from
     with open(MERGE_FROM_SEQ, "r", encoding="utf-8") as file:
         merge_from_sequence = json.load(file)
@@ -49,19 +48,19 @@ if __name__ == "__main__":
         merge_from_duplicates = json.load(file)
 
     # load the corresponding files
-    for cost in tqdm(np.arange(0.0, MAX_LEN +0.5, 0.5)):
+    for cost in tqdm(np.arange(0.0, MAX_LEN + 0.5, 0.5)):
         with open(f"{ORIG_DIR}sequences_{cost}.json", "r", encoding="utf-8") as file:
             sequences = json.load(file)
         with open(f"{ORIG_DIR}duplicates_{cost}.json", "r", encoding="utf-8") as file:
             duplicates = json.load(file)
         tensor = np.load(f"{ORIG_DIR}tensor_{cost}.npy")
 
-        #extend the sequences and matrices
+        # extend the sequences and matrices
         for seq in merge_from_sequence:
             if count_t_equiv(seq) == cost:
                 if seq not in sequences:
                     sequences.append(seq)
-                    matrix = seq2mat(seq).reshape(2,1,2)
+                    matrix = seq2mat(seq).reshape(2, 1, 2)
                     tensor = np.concatenate((tensor, matrix), axis=1)
                 else:
                     continue

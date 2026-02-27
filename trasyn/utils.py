@@ -2,7 +2,9 @@ import json
 import os
 import subprocess
 from collections.abc import Generator, Sequence
+from copy import copy
 from functools import lru_cache
+from itertools import combinations
 from typing import Callable
 
 import numpy as np
@@ -222,3 +224,167 @@ def replace(sequences: list[str], old: str, new: str) -> list[str]:
         sequences[i] = seq.replace(old, new)
 
     return sequences
+
+
+def tuple_partitions(
+    n: float,
+    lower_bound: float,
+    upper_bound: float,
+    step: float,
+    length: int,
+    tol: float = 1e-9,
+):
+    """
+    Return all tuples of given length whose elements sum to n.
+    Each element lies within [lower_bound, upper_bound] and is an integer multiple of step.
+    """
+
+    # Discretize allowed values
+    values = [
+        round(lower_bound + i * step, 10)
+        for i in range(int((upper_bound - lower_bound) / step) + 1)
+    ]
+    results = []
+
+    # Efficient iterative filtering rather than brute-force product
+    def search(prefix, remaining_sum, depth):
+        if depth == length - 1:
+            last = remaining_sum
+            # Check if last fits the discretization grid and bounds
+            if (lower_bound - tol) <= last <= (upper_bound + tol):
+                if abs(last / step - round(last / step)) < tol:
+                    results.append(tuple(prefix + [round(last, 10)]))
+            return
+
+        for v in values:
+            # Prune if overshooting is obvious
+            min_possible = (length - depth - 1) * lower_bound
+            max_possible = (length - depth - 1) * upper_bound
+            if not (min_possible - tol <= remaining_sum - v <= max_possible + tol):
+                continue
+            search(prefix + [v], remaining_sum - v, depth + 1)
+
+    search([], n, 0)
+    return results
+
+
+def min_valid_subset(original_set, f):
+    elements = list(original_set)
+    n = len(elements)
+
+    best_subset = None
+    best_size = 0
+
+    def has_valid_subset(k):
+        nonlocal best_subset, best_size
+        if k == 0:
+            if f(set()):
+                best_subset = set()
+                best_size = 0
+            return f(set())
+
+        for subset_tuple in combinations(elements, k):
+            subset = set(subset_tuple)
+            if f(subset):
+                # Found valid! Update best
+                if k < best_size or best_size == 0:
+                    best_subset = subset
+                    best_size = k
+                return True  # Early exit: size k possible
+        return False
+
+    # Binary search for min size
+    low, high = 0, n
+    while low < high:
+        mid = (low + high + 1) // 2
+        if has_valid_subset(mid):
+            high = mid - 1
+        else:
+            low = mid
+            # high = mid - 1
+
+    # Verify final result
+    if best_size > 0:
+        return best_size, best_subset
+
+    return None, None  # No valid subset exists
+
+
+def backtrack_sequences_with_cost(
+    target: float, costs: dict[str, float | int]
+) -> list[str]:
+    """
+    Creates all possible combinations of identifiers (keys of cost) so that the sum of the
+    costs gives the target.
+    """
+    result: list[str] = []
+    eps = 1e-9  # to handle float rounding
+
+    def backtrack(current: str, total: float):
+        if abs(total - target) < eps:
+            result.append(current)
+            return
+        if total > target + eps:
+            return
+
+        for char, cost_value in costs.items():
+            backtrack(current + char, total + cost_value)
+
+    backtrack("", 0.0)
+    return result
+
+
+def find_unsupported_trajectories(
+    costs: dict[str, int | float], partitioning: list[list[int | float]]
+):
+    """
+    Find all the trajectories i.e. sequences of gates in the cost dict that are not supported by
+    the provided partitioning.
+    For Example: there are t and q gates in the costs dict, we built all the sequences of only t
+    and q according to the total costs extracted from the partitioning.
+    costs = {t:1.0, q:2.5}, from partitioning the total cost is 5
+    sequences = [qq, ttttt]
+    loop through the partitionings and check which of the above sequences is supported and which not
+    """
+    targets = list(map(sum, partitioning))
+    assert all(x == targets[0] for x in targets), (
+        "total cost must be equal for all input partitionings."
+    )
+
+    sequences = backtrack_sequences_with_cost(targets[0], costs)
+
+    unsupported = []
+    for seq in sequences:
+        budgets = [copy(part) for part in partitioning]
+        if not any([supports_sequence(budget, costs, seq) for budget in budgets]):
+            unsupported.append(seq)
+
+    return unsupported
+
+
+def supports_sequence(
+    budget: list[int | float], costs: dict[str, int | float], sequence: str
+):
+    tol = 1e-8
+    current_cost = 0.0
+    current_index = 0
+    current_cost_ceiling = budget[current_index]
+    for char in sequence:
+        if abs(current_cost_ceiling - current_cost) < tol:
+            current_index += 1
+            current_cost_ceiling = budget[current_index]
+            current_cost = 0.0
+
+        if (
+            costs[char] - (current_cost_ceiling - current_cost) > tol
+            and abs(current_cost_ceiling - current_cost) > tol
+        ):
+            # char doesn't fit in current bucket but bucket is not full yet
+            # means sequence is not supported
+            return False
+
+        # char fits in current bucket
+        if costs[char] <= current_cost_ceiling - current_cost:
+            current_cost += costs[char]
+
+    return True

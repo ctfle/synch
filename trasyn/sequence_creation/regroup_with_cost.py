@@ -32,7 +32,6 @@ NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_
 os.makedirs(NEW_DIR, exist_ok=True)
 
 
-
 if __name__ == "__main__":
     # Load base Clifford data (0 non-Cliffords, same for both)
     matrices_0 = np.load(f"{ORIG_DIR}tensor_0.npy")

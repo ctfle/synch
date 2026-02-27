@@ -34,7 +34,6 @@ NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/filtered/{non
 os.makedirs(NEW_DIR, exist_ok=True)
 
 
-
 if __name__ == "__main__":
     # Load base Clifford data (0 non-Cliffords, same for both)
     matrices_0 = np.load(f"{ORIG_DIR}tensor_0.npy")
@@ -72,19 +71,18 @@ if __name__ == "__main__":
 
         # Classify each sequence by its T-equivalent count - FIXED: proper list append
         for idx, seqstr in enumerate(sequences_k):
-            
-            if seqstr.count("q")<=MAX_NUM_SQRTT:
+            if seqstr.count("q") <= MAX_NUM_SQRTT:
                 t_equiv = count_t_equiv(seqstr)
-                if t_equiv ==7:
+                if t_equiv == 7:
                     print("7")
                 if t_equiv > MAX_T_EQUIV:
                     continue
-    
+
                 if t_equiv not in all_matrices:
                     # all_matrices[t_equiv] = []
                     all_sequences[t_equiv] = []
                     all_duplicates[t_equiv] = {}
-    
+
                 # Extract matrix for this sequence (matrices_k is shape (2,N,2))
                 matrix = matrices_k[:, idx, :]  # shape (2,2)
 
@@ -96,7 +94,7 @@ if __name__ == "__main__":
                     all_matrices[t_equiv] = np.concatenate(
                         [all_matrices[t_equiv], matrix.reshape(2, 1, 2)], axis=1
                     )
-    
+
                 all_sequences[t_equiv].append(seqstr)
                 if dupl := duplicates_k.get(seqstr, None):
                     all_duplicates[t_equiv][seqstr] = dupl

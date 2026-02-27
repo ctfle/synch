@@ -24,9 +24,8 @@ nonclifford_gates = "tq"
 ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gates}{clifford_gates}_large/"
 
 if __name__ == "__main__":
-
     Path(ASSETS_DIR).mkdir(parents=True, exist_ok=True)
-    
+
     try:
         matrices = np.load(f"{ASSETS_DIR}tensor_0.npy")
         with open(f"{ASSETS_DIR}sequences_0.json", "r", encoding="utf-8") as file:
