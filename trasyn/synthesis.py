@@ -397,13 +397,16 @@ class Sythesiser:
             if self.error_threshold is not None and error <= self.error_threshold:
                 break
 
+        self._verify_result(target_unitary, result)
+        return result
+
+    def _verify_result(self, target_unitary: NDArray, result: SynthesisResult):
         if self.error_threshold is not None and result.error > self.error_threshold:
             warnings.warn(
                 f"Error threshold {self.error_threshold} is not reached "
                 f"by the lowest error found: {result.error}."
             )
         assert np.allclose(distance(target_unitary, seq2mat(result.seqstr)), result.error)
-        return result
 
     def get_sequence_str(self, indices: Iterable[int], budget: Iterable[int]) -> str:
         """Get the sequences of gates as str associated with the budget and the indices"""
