@@ -422,7 +422,6 @@ class Synthesiser:
         bitstring = None
         result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
-            print("inside budget loop", budget)
             mps = self.get_sequence_of_tensors(budget)
             mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)
