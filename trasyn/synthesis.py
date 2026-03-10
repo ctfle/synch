@@ -12,7 +12,7 @@ from trasyn.utils import (
     seq2mat,
     tuple_partitions,
     find_unsupported_trajectories,
-    min_valid_subset,
+    backtrack_sequences_with_cost,
 )
 
 import numpy as np
@@ -81,7 +81,6 @@ class BudgetPartitioner(ABC):
         self.total_non_clifford_budget = total_non_clifford_budget
         self.max_partition_value = max_partition_value
         self._verify_costs()
-        self._verify_max_partition_value()
 
     def _verify_costs(self):
         assert np.allclose(self.min_gate_cost, 1), "min cost should be set to 1."
@@ -90,14 +89,6 @@ class BudgetPartitioner(ABC):
                 "Costs must be integer or multiple of 1/2."
             )
             assert len(id) == 1, "Cost id must be single char. "
-
-    def _verify_max_partition_value(self):
-        """
-        This condition arises from ergodicity requirement. Without we cannot sample ergodically.
-        """
-        assert self.max_partition_value >= self.max_gate_cost * 2, (
-            f"max partition value must be > 2 * gate cost value {self.max_gate_cost}"
-        )
 
     @property
     def cost_values(self) -> list[float]:
@@ -281,8 +272,9 @@ class ErgodicPartitioner(BudgetPartitioner):
                 raw_partitions = tuple_partitions(
                     total_cost, 1, self.max_partition_value, length=length, step=1
                 )
-                _, min_subset = min_valid_subset(
-                    raw_partitions, self._is_valid_partition
+
+                _, min_subset = self._greedy_min_subset(
+                    raw_partitions
                 )
 
             return list(map(list, min_subset))
@@ -300,19 +292,50 @@ class ErgodicPartitioner(BudgetPartitioner):
                 raw_partitions = tuple_partitions(
                     total_cost, 1, self.max_partition_value, length=length, step=0.5
                 )
-                _, min_subset = min_valid_subset(
-                    raw_partitions, self._is_valid_partition
+                _, min_subset = self._greedy_min_subset(
+                    raw_partitions
                 )
 
             partition = list(map(list, min_subset))
-
         return partition
 
     def _is_valid_partition(self, partition):
         return find_unsupported_trajectories(self.costs, partition) == []
 
+    def _greedy_min_subset(self, elements: list[list[int | float ]]):
+        remaining = list(elements)
+        subset = []
+        while remaining:
+            # Score by marginal gain: f(subset + [e]) improvement
+            scores = []
+            current_remainder = self._evaluate_remainder(subset, elements)
+            for e in remaining:
 
-class Sythesiser:
+                test_subset = subset + [e]
+                if current_remainder > len(find_unsupported_trajectories(self.costs, test_subset)):
+                    scores.append((1.0 / (len(test_subset) + 1), e))  # Favor smaller
+                else:
+                    scores.append((0, e))
+
+            if not any(s[0] > 0 for s in scores):
+                break
+
+            # Pick best
+            _, best_e = max(scores)
+            subset.append(best_e)
+            remaining.remove(best_e)
+
+        return (len(subset), set(subset)) if find_unsupported_trajectories(self.costs, subset) == [] else (None, None)
+    
+    def _evaluate_remainder(self, subset: list[list[int | float]], elements: list[list[int | float]]):
+        total_cost = sum(elements[0])
+        return len(find_unsupported_trajectories(self.costs, subset)) if subset else len(
+            backtrack_sequences_with_cost(total_cost, self.costs))
+
+
+
+
+class Synthesiser:
     def __init__(
         self,
         partitioner: BudgetPartitioner,
@@ -399,7 +422,7 @@ class Sythesiser:
         bitstring = None
         result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
         for budget, _ in product(self.budget_composition, range(self.num_attempts)):
-            # print(budget)
+            print("inside budget loop", budget)
             mps = self.get_sequence_of_tensors(budget)
             mps = _trace_target_unitary(mps, target_unitary)
             n_samples = self.get_num_samples(mps, budget)

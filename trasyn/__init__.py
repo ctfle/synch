@@ -1,1 +1,1 @@
-from .synthesis import Sythesiser
+from .synthesis import Synthesiser

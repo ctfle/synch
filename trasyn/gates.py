@@ -19,6 +19,8 @@ def t() -> NDArray[np.complex128]:
 def sqrt_t() -> NDArray[np.complex128]:
     return np.array([[1, 0], [0, np.exp(1j * pi / 8)]])
 
+def sqrt_sqrt_t() -> NDArray[np.complex128]:
+    return np.array([[1, 0], [0, np.exp(1j * pi / 16)]])
 
 def x() -> NDArray[np.float64]:
     return np.array([[0, 1], [1, 0]])
@@ -102,14 +104,12 @@ GATES = {
     "s": s,
     "t": t,
     "q": sqrt_t,
+    "r": sqrt_sqrt_t,
     "x": x,
     "y": y,
     "z": z,
     "w": w,
     "i": i,
-    "rx": rx,
-    "ry": ry,
-    "rz": rz,
     "u": u,
     "u1": u1,
     "u2": u2,
