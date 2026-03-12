@@ -1,8 +1,10 @@
 import json
+import pickle
 import warnings
 from dataclasses import dataclass
 from functools import cached_property
-from itertools import product, permutations
+from itertools import permutations
+from pathlib import Path
 from typing import Literal, Iterable
 
 from abc import abstractmethod, ABC
@@ -333,8 +335,6 @@ class ErgodicPartitioner(BudgetPartitioner):
             backtrack_sequences_with_cost(total_cost, self.costs))
 
 
-
-
 class Synthesiser:
     def __init__(
         self,
@@ -349,7 +349,8 @@ class Synthesiser:
         self._num_samples = num_samples
         self.num_attempts = num_attempts
         self.budget_partitioner = partitioner
-
+        self.cache = UnitaryCache(self.load_dir)
+        
     @property
     def mem_size(self):
         return get_available_memory(gpu=False)
@@ -405,7 +406,7 @@ class Synthesiser:
 
         return duplicates
 
-    def get_sequence_of_tensors(self, budget: list[int]) -> list[NDArray]:
+    def get_sequence_of_tensors(self, budget: list[int | float]) -> list[NDArray]:
         """Generate a list of corresponding tensors according to budget."""
         return [self.get_tensor(b) for b in budget]
 
@@ -418,13 +419,58 @@ class Synthesiser:
     def sample_and_synthesize(
         self, target_unitary: NDArray, verbose: bool
     ) -> SynthesisResult:
+
+        result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
+        for budget in self.budget_composition:
+            retrieved_result = self.cache.retrieve(target_unitary, budget)
+            if retrieved_result is not None:
+                if retrieved_result.error < result.error:
+                    result = retrieved_result
+                continue
+            else:
+                result = self._create_mps_and_sample(budget, target_unitary, result, verbose=verbose)
+                self.cache.insert(target_unitary, budget, result)
+            # for _ in range(self.num_attempts):
+            #     mps = self.get_sequence_of_tensors(budget)
+            #     mps = _trace_target_unitary(mps, target_unitary)
+            #     n_samples = self.get_num_samples(mps, budget)
+            #     while n_samples:
+            #         try:
+            #             bitstring, fidelity = _sample(mps, n_samples, rng=rng)
+            #             break
+            #         except MemError:
+            #             n_samples = int(n_samples * 0.9)
+            # 
+            #     fidelity /= 2
+            #     fidelity = min(fidelity, 1)
+            #     error = np.sqrt(1 - fidelity**2)
+            #     if verbose:
+            #         print(f"Budget: {budget}, Num samples: {n_samples}")
+            #         print(f"Error:{error}, Fidelity: {fidelity}")
+            #     if error < result.error:
+            #         result = SynthesisResult(
+            #             error=error,
+            #             seqstr=self.get_sequence_str(bitstring, budget),
+            #             target_unitary=target_unitary,
+            #         )
+            #     if self.error_threshold is not None and error <= self.error_threshold:
+            #         break
+        
+
+        self._verify_result(target_unitary, result)
+        self.cache.save_cache()
+        return result
+
+    def _create_mps_and_sample(self, budget: list[int] | list[float], target_unitary: NDArray, 
+                         current_result: SynthesisResult, verbose: bool = False):
         fidelity = 0
         bitstring = None
-        result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
-        for budget, _ in product(self.budget_composition, range(self.num_attempts)):
-            mps = self.get_sequence_of_tensors(budget)
-            mps = _trace_target_unitary(mps, target_unitary)
-            n_samples = self.get_num_samples(mps, budget)
+        
+        mps = self.get_sequence_of_tensors(budget)
+        mps = _trace_target_unitary(mps, target_unitary)
+        n_samples = self.get_num_samples(mps, budget)
+        
+        for _ in range(self.num_attempts):
             while n_samples:
                 try:
                     bitstring, fidelity = _sample(mps, n_samples, rng=rng)
@@ -433,23 +479,21 @@ class Synthesiser:
                     n_samples = int(n_samples * 0.9)
 
             fidelity /= 2
-            # TODO: this makes no sense. Fidelity should not be > 1
             fidelity = min(fidelity, 1)
-            error = np.sqrt(1 - fidelity**2)
+            error = np.sqrt(1 - fidelity ** 2)
             if verbose:
                 print(f"Budget: {budget}, Num samples: {n_samples}")
                 print(f"Error:{error}, Fidelity: {fidelity}")
-            if error < result.error:
-                result = SynthesisResult(
+            if error < current_result.error:
+                current_result = SynthesisResult(
                     error=error,
                     seqstr=self.get_sequence_str(bitstring, budget),
                     target_unitary=target_unitary,
                 )
             if self.error_threshold is not None and error <= self.error_threshold:
                 break
-
-        self._verify_result(target_unitary, result)
-        return result
+        
+        return current_result
 
     def _verify_result(self, target_unitary: NDArray, result: SynthesisResult):
         if self.error_threshold is not None and result.error > self.error_threshold:
@@ -471,3 +515,42 @@ class Synthesiser:
             seqstr.append(target_str)
 
         return "".join(seqstr)
+
+
+class UnitaryCache:
+    """ Helper class to cache results """
+
+    def __init__(self, load_dir: str):
+        self.load_dir = load_dir
+        self._cached_results = self.load_cache()
+        
+    def load_cache(self):
+        """ Check the load_dir for possible cached results and load the into memory. """
+        
+        if Path(self.load_dir + "/cache").exists():
+            with open(self.load_dir + "/cache/unitary_cache.pkl", "rb") as handle:
+                cache = pickle.load(handle)
+        else:
+            cache: dict[tuple, SynthesisResult] = dict()
+    
+        return cache
+    
+    def save_cache(self):
+        os.makedirs(self.load_dir + "/cache", exist_ok=True)
+        with open(self.load_dir + "/cache/unitary_cache.pkl", "wb") as handle:
+            pickle.dump(self._cached_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
+    def _get_key(self, mat: NDArray, budget: list[float]) -> tuple:
+        assert mat.shape == (2,2), "only 2x2 matrices allowed"
+        mat_f = np.array(mat, copy=True)
+        xs_t = tuple(budget)
+        return (mat_f[0, 0], mat_f[0, 1], mat_f[1, 0], mat_f[1, 1], xs_t)
+    
+    def retrieve(self, mat: NDArray, budget: list[float]) -> SynthesisResult | None:
+        key = self._get_key(mat, budget)        
+        return self._cached_results.get(key, None)
+    
+    def insert(self, mat: NDArray, budget: list[float], result: SynthesisResult):
+        key = self._get_key(mat, budget)
+        assert key not in self._cached_results
+        self._cached_results[key] = result

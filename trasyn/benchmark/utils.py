@@ -2,9 +2,10 @@ import re
 from pathlib import Path
 import numpy as np
 import scipy.optimize
+from matplotlib.axes import Axes
 from tqdm import tqdm
 import pickle
-from trasyn.synthesis import BudgetPartitioner, Sythesiser, ErgodicPartitioner
+from trasyn.synthesis import BudgetPartitioner, Synthesiser, ErgodicPartitioner
 from trasyn.utils import random_unitary_2x2
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
@@ -69,7 +70,7 @@ def fit_raw_data(n: list[int | float], error: NDArray, color: str):
     )
 
 
-def fit_raw_data_log(n: list[int | float], error: NDArray, color: str):
+def fit_raw_data_log(ax: Axes, n: list[int | float], error: NDArray, color: str):
     pairs = np.array(sorted(zip(n, error)))
     n, error = zip(*pairs)
     n = np.array(n)
@@ -81,13 +82,15 @@ def fit_raw_data_log(n: list[int | float], error: NDArray, color: str):
     popt, pcov = scipy.optimize.curve_fit(_func, n, np.log(1 / error))
     perr = np.sqrt(np.diag(pcov))
     perr_prop = perr[0]
-    plt.plot(
+    line, = plt.plot(
         sorted(n),
         sorted(np.exp(_func(n, *popt))),
         "--",
-        label=f"$n = ({np.round(1 / popt[0], 2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon) (fit log)$",
+       #label=f"$n = ({np.round(1 / popt[0], 3)} \pm {np.round(perr_prop, 3)})\log(1/\epsilon) - {np.round(popt[1]/popt[0], 3)}$",
+        label=f"$R = {np.round((1 / popt[0])*np.log(2), 2)}\log_2(1/\epsilon) - {np.round(popt[1] / popt[0], 2)}$",
         color=color,
     )
+    return line
 
 
 def fit_data_lin(x: list[int | float], y: NDArray, color: str):
@@ -108,6 +111,28 @@ def fit_data_lin(x: list[int | float], y: NDArray, color: str):
         "--",
         label={
             f"$({np.round(popt[0], 2)} \pm {np.round(perr_prop, 2)})n+{np.round(popt[1], 2)}$"
+        },
+        color=color,
+    )
+
+def fit_data_const(x: list[int | float], y: NDArray, color: str):
+    pairs = np.array(sorted(zip(x, y)))
+    x, y = zip(*pairs)
+    x = np.array(x)
+    y = np.array(y)
+
+    def _func(x, b):
+        return np.ones(len(x)) * b
+
+    popt, pcov = scipy.optimize.curve_fit(_func, x, y)
+    perr = np.sqrt(np.diag(pcov))
+    perr_prop = perr[0]
+    plt.plot(
+        sorted(x),
+        sorted(_func(x, popt)),
+        "--",
+        label={
+            f"${np.round(popt[0], 2)} \pm {np.round(perr_prop, 2)}$"
         },
         color=color,
     )
@@ -277,7 +302,7 @@ def benchmark_on_random_unitaries(
             total_non_clifford_budget=nc_budget,
             costs=costs,
         )
-        syn = Sythesiser(
+        syn = Synthesiser(
             partitioner=partitioner,
             load_dir=load_dir,
             num_attempts=num_attempts,
@@ -318,13 +343,12 @@ def benchmark_budget(
 ):
     # Ensure save directory exists
     Path(save_dir).mkdir(parents=True, exist_ok=True)
-    syn = Sythesiser(
+    syn = Synthesiser(
         partitioner=partitioner,
         load_dir=load_dir,
         num_attempts=num_attempts,
         num_samples=num_samples,
     )
-
     errors = []
     seqs = []
     target_unitaries = []
