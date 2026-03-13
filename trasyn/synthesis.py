@@ -341,6 +341,7 @@ class Synthesiser:
         partitioner: BudgetPartitioner,
         error_threshold: float | None = None,
         load_dir: str = f"{ASSETS_DIR}" + "tshxyz",
+        cache_dir: str | None = None,
         num_attempts: int = 5,
         num_samples: int | None = None,
     ):
@@ -349,7 +350,7 @@ class Synthesiser:
         self._num_samples = num_samples
         self.num_attempts = num_attempts
         self.budget_partitioner = partitioner
-        self.cache = UnitaryCache(self.load_dir)
+        self.cache = UnitaryCache(cache_dir) if cache_dir is not None else UnitaryCache(self.load_dir)
         
     @property
     def mem_size(self):
@@ -430,32 +431,6 @@ class Synthesiser:
             else:
                 result = self._create_mps_and_sample(budget, target_unitary, result, verbose=verbose)
                 self.cache.insert(target_unitary, budget, result)
-            # for _ in range(self.num_attempts):
-            #     mps = self.get_sequence_of_tensors(budget)
-            #     mps = _trace_target_unitary(mps, target_unitary)
-            #     n_samples = self.get_num_samples(mps, budget)
-            #     while n_samples:
-            #         try:
-            #             bitstring, fidelity = _sample(mps, n_samples, rng=rng)
-            #             break
-            #         except MemError:
-            #             n_samples = int(n_samples * 0.9)
-            # 
-            #     fidelity /= 2
-            #     fidelity = min(fidelity, 1)
-            #     error = np.sqrt(1 - fidelity**2)
-            #     if verbose:
-            #         print(f"Budget: {budget}, Num samples: {n_samples}")
-            #         print(f"Error:{error}, Fidelity: {fidelity}")
-            #     if error < result.error:
-            #         result = SynthesisResult(
-            #             error=error,
-            #             seqstr=self.get_sequence_str(bitstring, budget),
-            #             target_unitary=target_unitary,
-            #         )
-            #     if self.error_threshold is not None and error <= self.error_threshold:
-            #         break
-        
 
         self._verify_result(target_unitary, result)
         self.cache.save_cache()
