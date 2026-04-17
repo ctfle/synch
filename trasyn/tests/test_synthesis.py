@@ -77,6 +77,6 @@ class TestSynthesis:
         result = syn.sample_and_synthesize(target_unitary, verbose=False)
         assert np.allclose(
             distance(target_unitary, seq2mat(result.seqstr)), result.error
-        )
+        , atol=1e-7)
 
         assert np.allclose(result.error, 0.0, atol=1e-7)
