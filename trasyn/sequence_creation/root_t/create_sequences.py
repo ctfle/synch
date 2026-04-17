@@ -12,19 +12,21 @@ from trasyn.utils import replace, replace_and_drop, count_t_equiv, seq2mat, trac
 
 try:
     import cupy as cp
+
     asnumpy = cp.asnumpy
 except ModuleNotFoundError:
     cp = np
     asnumpy = np.asarray
 
 
-class SequenceCreator():
-
-    def __init__(self, trivial_clifford_gates: str = "xyz",
-                 nontrivial_clifford_gates: str = "sh",
-                 non_clifford_gates: str = "tq",
-                 costs: dict =  {"t": 1.0, "q": 2.5},
-                 max_t_equiv: int = 8):
+class SequenceCreator:
+    def __init__(
+        self,
+        trivial_clifford_gates: str = "xyz",
+        nontrivial_clifford_gates: str = "sh",
+        non_clifford_gates: str = "tq",
+        max_t_equiv: int = 8,
+    ):
         """
         The strategy we use to create all sequences that contain sqrtT and T gates (annotated t
         and q here) works as follows:
@@ -42,18 +44,20 @@ class SequenceCreator():
 
         self.trivial_clifford_gates = trivial_clifford_gates
         self.nontrivial_clifford_gates = nontrivial_clifford_gates
-        self.clifford_gates = self.nontrivial_clifford_gates + self.trivial_clifford_gates
+        self.clifford_gates = (
+            self.nontrivial_clifford_gates + self.trivial_clifford_gates
+        )
         self.non_clifford_gates = non_clifford_gates
         self.asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/test_{self.non_clifford_gates}{self.clifford_gates}/"
         Path(self.asset_dir).mkdir(parents=True, exist_ok=True)
         self._t_asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/t{self.clifford_gates}/"
-        self.costs = costs
         self.max_len = 3
         self.max_t_equiv = max_t_equiv
         self._temp_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/temp/{self.non_clifford_gates}{self.clifford_gates}/"
 
-
-    def generate_unique_sequences(self, ):
+    def generate_unique_sequences(
+        self,
+    ):
         # create the all sequences with either t or q up to self.
         Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
         self._create()
@@ -62,7 +66,7 @@ class SequenceCreator():
         shutil.rmtree(self._temp_dir)
 
     def _regroup_with_cost(self):
-        """ Loads the bare sequences and regroups them according to cost. """
+        """Loads the bare sequences and regroups them according to cost."""
         matrices_0 = np.load(f"{self._temp_dir}tensor_0.npy")
         with open(f"{self._temp_dir}sequences_0.json", "r", encoding="utf-8") as file:
             sequences_0 = json.load(file)
@@ -73,7 +77,9 @@ class SequenceCreator():
         np.save(f"{self.asset_dir}tensor_0.0.npy", matrices_0)
         with open(f"{self.asset_dir}sequences_0.0.json", "w", encoding="utf-8") as file:
             json.dump(sequences_0, file, indent=4)
-        with open(f"{self.asset_dir}duplicates_0.0.json", "w", encoding="utf-8") as file:
+        with open(
+            f"{self.asset_dir}duplicates_0.0.json", "w", encoding="utf-8"
+        ) as file:
             json.dump(duplicates_0, file, indent=4)
 
         print("Base Clifford data copied (0 T-equivalent).")
@@ -129,12 +135,15 @@ class SequenceCreator():
                 print(f"T-equivalent {t_equiv}: empty bucket")
                 # Create empty files for consistency
                 np.save(
-                    f"{self.asset_dir}tensor_{t_equiv}.npy", np.empty((2, 0, 2), dtype=complex)
+                    f"{self.asset_dir}tensor_{t_equiv}.npy",
+                    np.empty((2, 0, 2), dtype=complex),
                 )
-                with open(f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
+                with open(
+                    f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8"
+                ) as f:
                     json.dump([], f, indent=4)
                 with open(
-                        f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8"
+                    f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8"
                 ) as f:
                     json.dump({}, f, indent=4)
                 continue
@@ -144,9 +153,13 @@ class SequenceCreator():
             )
 
             np.save(f"{self.asset_dir}tensor_{t_equiv}.npy", all_matrices[t_equiv])
-            with open(f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
+            with open(
+                f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(all_sequences[t_equiv], f, indent=4)
-            with open(f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8") as f:
+            with open(
+                f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(all_duplicates[t_equiv], f, indent=4)
 
             print(
@@ -155,7 +168,7 @@ class SequenceCreator():
         print(f"\nRegrouping complete! New files in {self.asset_dir}")
 
     def _merge_sequences(self):
-        """ To get all sequenes we need to include the ones with only T gates"""
+        """To get all sequenes we need to include the ones with only T gates"""
         merge_from_seq = self._t_asset_dir + "sequences_11.json"
         merge_from_dup = self._t_asset_dir + "duplicates_11.json"
         # load sequences and duplicates to merge from
@@ -167,9 +180,13 @@ class SequenceCreator():
 
         # load the corresponding files
         for cost in np.arange(0.0, self.max_t_equiv + 0.5, 0.5):
-            with open(f"{self.asset_dir}sequences_{cost}.json", "r", encoding="utf-8") as file:
+            with open(
+                f"{self.asset_dir}sequences_{cost}.json", "r", encoding="utf-8"
+            ) as file:
                 sequences = json.load(file)
-            with open(f"{self.asset_dir}duplicates_{cost}.json", "r", encoding="utf-8") as file:
+            with open(
+                f"{self.asset_dir}duplicates_{cost}.json", "r", encoding="utf-8"
+            ) as file:
                 duplicates = json.load(file)
             tensor = np.load(f"{self.asset_dir}tensor_{cost}.npy")
 
@@ -193,15 +210,21 @@ class SequenceCreator():
 
             # save under new dir
             np.save(f"{self.asset_dir}tensor_{cost}.npy", tensor)
-            with open(f"{self.asset_dir}sequences_{cost}.json", "w", encoding="utf-8") as file:
+            with open(
+                f"{self.asset_dir}sequences_{cost}.json", "w", encoding="utf-8"
+            ) as file:
                 json.dump(sequences, file, indent=4)
-            with open(f"{self.asset_dir}duplicates_{cost}.json", "w", encoding="utf-8") as file:
+            with open(
+                f"{self.asset_dir}duplicates_{cost}.json", "w", encoding="utf-8"
+            ) as file:
                 json.dump(duplicates, file, indent=4)
 
     def _create(self):
         try:
             matrices = np.load(f"{self._temp_dir}tensor_0.npy")
-            with open(f"{self._temp_dir}sequences_0.json", "r", encoding="utf-8") as file:
+            with open(
+                f"{self._temp_dir}sequences_0.json", "r", encoding="utf-8"
+            ) as file:
                 hs_sequences = json.load(file)
         except FileNotFoundError:
             matrices = np.eye(2, dtype=complex).reshape(1, 2, 2)
@@ -236,9 +259,13 @@ class SequenceCreator():
 
             matrices = matrices.transpose(1, 0, 2)
             np.save(f"{self._temp_dir}tensor_0.npy", matrices)
-            with open(f"{self._temp_dir}sequences_0.json", "w", encoding="utf-8") as file:
+            with open(
+                f"{self._temp_dir}sequences_0.json", "w", encoding="utf-8"
+            ) as file:
                 json.dump(sequences, file, indent=4)
-            with open(f"{self._temp_dir}duplicates_0.json", "w", encoding="utf-8") as file:
+            with open(
+                f"{self._temp_dir}duplicates_0.json", "w", encoding="utf-8"
+            ) as file:
                 json.dump(duplicates, file, indent=4)
             hs_sequences = sequences
 
@@ -247,27 +274,29 @@ class SequenceCreator():
 
         for length in range(1, self.max_len + 1):
             with open(
-                    f"{self._temp_dir}duplicates_{length - 1}.json",
-                    "r",
-                    encoding="utf-8",
+                f"{self._temp_dir}duplicates_{length - 1}.json",
+                "r",
+                encoding="utf-8",
             ) as file:
                 duplicates = json.load(file)
             with open(
-                    f"{self._temp_dir}sequences_{length - 1}.json", "r", encoding="utf-8"
+                f"{self._temp_dir}sequences_{length - 1}.json", "r", encoding="utf-8"
             ) as file:
                 sequences = json.load(file)
-            matrices = np.load(f"{self._temp_dir}tensor_{length - 1}.npy").transpose(1, 0, 2)
+            matrices = np.load(f"{self._temp_dir}tensor_{length - 1}.npy").transpose(
+                1, 0, 2
+            )
             matrices = cp.asarray(matrices)
             t_block = cp.asarray(t_block)
             sqrt_t_block = cp.asarray(sqrt_t_block)
             counter = 0
 
             for (mat1, seq1), (mat2, seq2, nc_symb) in product(
-                    zip(matrices, sequences),
-                    chain(
-                        zip(t_block, hs_sequences, ["T"] * len(hs_sequences)),
-                        zip(sqrt_t_block, hs_sequences, ["sqrtT"] * len(hs_sequences)),
-                    ),
+                zip(matrices, sequences),
+                chain(
+                    zip(t_block, hs_sequences, ["T"] * len(hs_sequences)),
+                    zip(sqrt_t_block, hs_sequences, ["sqrtT"] * len(hs_sequences)),
+                ),
             ):
                 if nc_symb == "T":
                     seqstr = _substitute_duplicates(seq1 + "t" + seq2, duplicates)
@@ -277,7 +306,8 @@ class SequenceCreator():
                 counter += 1
                 if counter % 1000 == 0:
                     print(
-                        f"number of t/q gates {length}, iteration counter: {counter}, number of unique sequences: {len(sequences)}")
+                        f"number of t/q gates {length}, iteration counter: {counter}, number of unique sequences: {len(sequences)}"
+                    )
                 if seqstr in sequences:
                     continue
                 matrix = mat1 @ mat2
@@ -298,7 +328,9 @@ class SequenceCreator():
                     counts = []
                     for s in (existing_seq, seqstr):
                         counts.append([])
-                        for gate in self.non_clifford_gates + self.nontrivial_clifford_gates:
+                        for gate in (
+                            self.non_clifford_gates + self.nontrivial_clifford_gates
+                        ):
                             counts[-1].append(s.count(gate))
                         counts[-1].append(len(s))
                         counts[-1].append(s)
@@ -308,16 +340,17 @@ class SequenceCreator():
                         duplicates[seqstr] = existing_seq
 
             np.save(
-                f"{self._temp_dir}tensor_{length}.npy", asnumpy(matrices.transpose(1, 0, 2))
+                f"{self._temp_dir}tensor_{length}.npy",
+                asnumpy(matrices.transpose(1, 0, 2)),
             )
             with open(
-                    f"{self._temp_dir}sequences_{length}.json", "w", encoding="utf-8"
+                f"{self._temp_dir}sequences_{length}.json", "w", encoding="utf-8"
             ) as file:
                 json.dump(sequences, file, indent=4)
             with open(
-                    f"{self._temp_dir}duplicates_{length}.json",
-                    "w",
-                    encoding="utf-8",
+                f"{self._temp_dir}duplicates_{length}.json",
+                "w",
+                encoding="utf-8",
             ) as file:
                 json.dump(duplicates, file, indent=4)
 
@@ -325,6 +358,3 @@ class SequenceCreator():
 if __name__ == "__main__":
     creator = SequenceCreator()
     creator.generate_unique_sequences()
-
-
-

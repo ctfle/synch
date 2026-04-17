@@ -19,8 +19,10 @@ def t() -> NDArray[np.complex128]:
 def sqrt_t() -> NDArray[np.complex128]:
     return np.array([[1, 0], [0, np.exp(1j * pi / 8)]])
 
+
 def sqrt_sqrt_t() -> NDArray[np.complex128]:
     return np.array([[1, 0], [0, np.exp(1j * pi / 16)]])
+
 
 def x() -> NDArray[np.float64]:
     return np.array([[0, 1], [1, 0]])

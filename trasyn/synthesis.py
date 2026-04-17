@@ -277,9 +277,7 @@ class ErgodicPartitioner(BudgetPartitioner):
                     total_cost, 1, self.max_partition_value, length=length, step=1
                 )
 
-                _, min_subset = self._greedy_min_subset(
-                    raw_partitions
-                )
+                _, min_subset = self._greedy_min_subset(raw_partitions)
 
             return list(map(list, min_subset))
 
@@ -296,9 +294,7 @@ class ErgodicPartitioner(BudgetPartitioner):
                 raw_partitions = tuple_partitions(
                     total_cost, 1, self.max_partition_value, length=length, step=0.5
                 )
-                _, min_subset = self._greedy_min_subset(
-                    raw_partitions
-                )
+                _, min_subset = self._greedy_min_subset(raw_partitions)
 
             partition = list(map(list, min_subset))
         return partition
@@ -306,7 +302,7 @@ class ErgodicPartitioner(BudgetPartitioner):
     def _is_valid_partition(self, partition):
         return find_unsupported_trajectories(self.costs, partition) == []
 
-    def _greedy_min_subset(self, elements: list[list[int | float ]]):
+    def _greedy_min_subset(self, elements: list[list[int | float]]):
         remaining = list(elements)
         subset = []
         while remaining:
@@ -314,9 +310,10 @@ class ErgodicPartitioner(BudgetPartitioner):
             scores = []
             current_remainder = self._evaluate_remainder(subset, elements)
             for e in remaining:
-
                 test_subset = subset + [e]
-                if current_remainder > len(find_unsupported_trajectories(self.costs, test_subset)):
+                if current_remainder > len(
+                    find_unsupported_trajectories(self.costs, test_subset)
+                ):
                     scores.append((1.0 / (len(test_subset) + 1), e))  # Favor smaller
                 else:
                     scores.append((0, e))
@@ -329,12 +326,21 @@ class ErgodicPartitioner(BudgetPartitioner):
             subset.append(best_e)
             remaining.remove(best_e)
 
-        return (len(subset), set(subset)) if find_unsupported_trajectories(self.costs, subset) == [] else (None, None)
+        return (
+            (len(subset), set(subset))
+            if find_unsupported_trajectories(self.costs, subset) == []
+            else (None, None)
+        )
 
-    def _evaluate_remainder(self, subset: list[list[int | float]], elements: list[list[int | float]]):
+    def _evaluate_remainder(
+        self, subset: list[list[int | float]], elements: list[list[int | float]]
+    ):
         total_cost = sum(elements[0])
-        return len(find_unsupported_trajectories(self.costs, subset)) if subset else len(
-            backtrack_sequences_with_cost(total_cost, self.costs))
+        return (
+            len(find_unsupported_trajectories(self.costs, subset))
+            if subset
+            else len(backtrack_sequences_with_cost(total_cost, self.costs))
+        )
 
 
 class Synthesiser:
@@ -352,7 +358,11 @@ class Synthesiser:
         self._num_samples = num_samples
         self.num_attempts = num_attempts
         self.budget_partitioner = partitioner
-        self.cache = UnitaryCache(cache_dir) if cache_dir is not None else UnitaryCache(self.load_dir)
+        self.cache = (
+            UnitaryCache(cache_dir)
+            if cache_dir is not None
+            else UnitaryCache(self.load_dir)
+        )
 
     @property
     def mem_size(self):
@@ -422,7 +432,6 @@ class Synthesiser:
     def sample_and_synthesize(
         self, target_unitary: NDArray, verbose: bool
     ) -> SynthesisResult:
-
         result = SynthesisResult(error=2, seqstr="", target_unitary=target_unitary)
         for budget in self.budget_composition:
             retrieved_result = self.cache.retrieve(target_unitary, budget)
@@ -432,22 +441,29 @@ class Synthesiser:
                     result = retrieved_result
                 continue
             else:
-                result = self._create_mps_and_sample(budget, target_unitary, result, verbose=verbose)
+                result = self._create_mps_and_sample(
+                    budget, target_unitary, result, verbose=verbose
+                )
                 self.cache.insert(target_unitary, budget, result)
 
         self._verify_result(target_unitary, result)
         self.cache.save_cache()
         return result
 
-    def _create_mps_and_sample(self, budget: list[int] | list[float], target_unitary: NDArray,
-                         current_result: SynthesisResult, verbose: bool = False):
+    def _create_mps_and_sample(
+        self,
+        budget: list[int] | list[float],
+        target_unitary: NDArray,
+        current_result: SynthesisResult,
+        verbose: bool = False,
+    ):
         fidelity = 0
         bitstring = None
-        
+
         mps = self.get_sequence_of_tensors(budget)
         mps = _trace_target_unitary(mps, target_unitary)
         n_samples = self.get_num_samples(mps, budget)
-        
+
         for _ in range(self.num_attempts):
             while n_samples:
                 try:
@@ -458,7 +474,7 @@ class Synthesiser:
 
             fidelity /= 2
             fidelity = min(fidelity, 1)
-            error = np.sqrt(1 - fidelity ** 2)
+            error = np.sqrt(1 - fidelity**2)
             if verbose:
                 print(f"Budget: {budget}, Num samples: {n_samples}")
                 print(f"Error:{error}, Fidelity: {fidelity}")
@@ -470,7 +486,7 @@ class Synthesiser:
                 )
             if self.error_threshold is not None and error <= self.error_threshold:
                 break
-        
+
         return current_result
 
     def _verify_result(self, target_unitary: NDArray, result: SynthesisResult):
@@ -496,15 +512,15 @@ class Synthesiser:
 
 
 class UnitaryCache:
-    """ Helper class to cache results """
+    """Helper class to cache results"""
 
     def __init__(self, load_dir: str, precision=1e-10):
         self.load_dir = load_dir
         self._cached_results = self.load_cache()
-        self._precision_factor = int(1/precision)
+        self._precision_factor = int(1 / precision)
 
     def load_cache(self):
-        """ Check the load_dir for possible cached results and load the into memory. """
+        """Check the load_dir for possible cached results and load the into memory."""
 
         if Path(self.load_dir + "/unitary_cache.pkl").exists():
             cache = self._safe_read(self.load_dir + "/unitary_cache.pkl")
@@ -518,15 +534,15 @@ class UnitaryCache:
         self._safe_write(self.load_dir + "/unitary_cache.pkl", self._cached_results)
 
     def _safe_write(self, filename, data):
-        with open(filename, 'wb') as file:
+        with open(filename, "wb") as file:
             # Get an exclusive lock (blocks until available)
             fcntl.flock(file, fcntl.LOCK_EX)
             pickle.dump(data, file)
             # Lock is automatically released when file closes
             fcntl.flock(file, fcntl.LOCK_UN)
 
-    def _safe_read(self, filename) -> dict[tuple, SynthesisResult] :
-        with open(filename, 'rb') as file:
+    def _safe_read(self, filename) -> dict[tuple, SynthesisResult]:
+        with open(filename, "rb") as file:
             # Get a shared lock (allows other readers, blocks writers)
             fcntl.flock(file, fcntl.LOCK_SH)
             data = pickle.load(file)
@@ -534,23 +550,29 @@ class UnitaryCache:
             return data
 
     def _get_key(self, mat: NDArray, budget: list[float]) -> tuple:
-        assert mat.shape == (2,2), "only 2x2 matrices allowed"
+        assert mat.shape == (2, 2), "only 2x2 matrices allowed"
         mat_f = np.array(mat, copy=True)
         xs_t = tuple(budget)
-        stabilised_mat_vals = tuple(map(self._stabilize_complex, (mat_f[0, 0], mat_f[0, 1],
-                                                                  mat_f[1, 0], mat_f[1, 1])))
-        stabilised_budget = tuple(map(lambda x: int(round(x*10)), xs_t))
+        stabilised_mat_vals = tuple(
+            map(
+                self._stabilize_complex,
+                (mat_f[0, 0], mat_f[0, 1], mat_f[1, 0], mat_f[1, 1]),
+            )
+        )
+        stabilised_budget = tuple(map(lambda x: int(round(x * 10)), xs_t))
 
-        return  stabilised_mat_vals + (stabilised_budget, )
+        return stabilised_mat_vals + (stabilised_budget,)
 
     def _stabilize_complex(self, value):
-        return (int(round(value.real * self._precision_factor)),
-                int(round(value.imag * self._precision_factor)))
+        return (
+            int(round(value.real * self._precision_factor)),
+            int(round(value.imag * self._precision_factor)),
+        )
 
     def retrieve(self, mat: NDArray, budget: list[float]) -> SynthesisResult | None:
         key = self._get_key(mat, budget)
         return self._cached_results.get(key, None)
-    
+
     def insert(self, mat: NDArray, budget: list[float], result: SynthesisResult):
         key = self._get_key(mat, budget)
         assert key not in self._cached_results
