@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from itertools import product, chain
 from pathlib import Path
 
@@ -24,6 +25,21 @@ class SequenceCreator():
                  non_clifford_gates: str = "tq",
                  costs: dict =  {"t": 1.0, "q": 2.5},
                  max_t_equiv: int = 8):
+        """
+        The strategy we use to create all sequences that contain sqrtT and T gates (annotated t
+        and q here) works as follows:
+        1. We create all sequences with an arbitrary number of t or q gates up to given number
+        (max_len). We do this up to max_len 6
+
+        2. We loop through the sequences and regroup them according to cost
+
+        3. To ensure we create all the sequences (including those which don't contain any q gates)
+        we merge our generated sequences with the ones that only have t gates as non-Clifford gates.
+
+        Note: There might be simpler approaches that achieve the same end result. This approach
+        was build on top of the approach provided by the original trasyn repo.
+        """
+
         self.trivial_clifford_gates = trivial_clifford_gates
         self.nontrivial_clifford_gates = nontrivial_clifford_gates
         self.clifford_gates = self.nontrivial_clifford_gates + self.trivial_clifford_gates
@@ -35,13 +51,15 @@ class SequenceCreator():
         self.max_len = 3
         self.max_t_equiv = max_t_equiv
         self._temp_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/temp/{self.non_clifford_gates}{self.clifford_gates}/"
-        Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
+
 
     def generate_unique_sequences(self, ):
         # create the all sequences with either t or q up to self.
+        Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
         self._create()
         self._regroup_with_cost()
         self._merge_sequences()
+        shutil.rmtree(self._temp_dir)
 
     def _regroup_with_cost(self):
         """ Loads the bare sequences and regroups them according to cost. """
@@ -215,7 +233,7 @@ class SequenceCreator():
                     if not duplicate:
                         sequences.append(seqstr)
                         matrices = np.vstack([matrices, matrix.reshape(1, 2, 2)])
-                        
+
             matrices = matrices.transpose(1, 0, 2)
             np.save(f"{self._temp_dir}tensor_0.npy", matrices)
             with open(f"{self._temp_dir}sequences_0.json", "w", encoding="utf-8") as file:
