@@ -1,6 +1,5 @@
-# trasyn: tensor-based arbitrary unitary synthesis
+# synch: an extension of trasyn using gates from the Clifford hierarchy
 
-trasyn is a gate synthesis algorithm for early fault-tolerant quantum computing. trasyn natively synthesizes arbitrary single-qubit unitaries to reduce the resulting non-Clifford gate count. For details, check out our paper [Reducing T Gates with Unitary Synthesis](https://arxiv.org/abs/2503.15843). For the original code and data for the paper, please refer to the `paper` branch.
 
 ## Install
 ### Minimum Installation
