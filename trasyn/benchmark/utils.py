@@ -81,14 +81,14 @@ def fit_raw_data_log(ax: Axes, n: list[int | float], error: NDArray, color: str)
 
     popt, pcov = scipy.optimize.curve_fit(_func, n, np.log(1 / error))
     perr = np.sqrt(np.diag(pcov))
-    perr_prop = perr[0]
-    line, = plt.plot(
+    (line,) = plt.plot(
         sorted(n),
         sorted(np.exp(_func(n, *popt))),
         "--",
-       #label=f"$n = ({np.round(1 / popt[0], 3)} \pm {np.round(perr_prop, 3)})\log(1/\epsilon) - {np.round(popt[1]/popt[0], 3)}$",
-        label=f"$R = {np.round((1 / popt[0])*np.log(2), 2)}\log_2(1/\epsilon) - {np.round(popt[1] / popt[0], 2)}$",
+        # label=f"$n = ({np.round(1 / popt[0], 3)} \pm {np.round(perr_prop, 3)})\log(1/\epsilon) - {np.round(popt[1]/popt[0], 3)}$",
+        label=f"$R = {np.round((1 / popt[0]) * np.log(2), 2)}\log_2(1/\epsilon) - {np.round(popt[1] / popt[0], 2)}$",
         color=color,
+        linewidth=2,
     )
     return line
 
@@ -115,6 +115,7 @@ def fit_data_lin(x: list[int | float], y: NDArray, color: str):
         color=color,
     )
 
+
 def fit_data_const(x: list[int | float], y: NDArray, color: str):
     pairs = np.array(sorted(zip(x, y)))
     x, y = zip(*pairs)
@@ -131,9 +132,7 @@ def fit_data_const(x: list[int | float], y: NDArray, color: str):
         sorted(x),
         sorted(_func(x, popt)),
         "--",
-        label={
-            f"${np.round(popt[0], 2)} \pm {np.round(perr_prop, 2)}$"
-        },
+        label={f"${np.round(popt[0], 2)} \pm {np.round(perr_prop, 2)}$"},
         color=color,
     )
 
