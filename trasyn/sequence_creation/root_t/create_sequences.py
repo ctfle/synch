@@ -26,6 +26,7 @@ class SequenceCreator:
         nontrivial_clifford_gates: str = "sh",
         non_clifford_gates: str = "tq",
         max_t_equiv: int = 8,
+        max_len: int = 6
     ):
         """
         The strategy we use to create all sequences that contain sqrtT and T gates (annotated t
@@ -37,9 +38,12 @@ class SequenceCreator:
 
         3. To ensure we create all the sequences (including those which don't contain any q gates)
         we merge our generated sequences with the ones that only have t gates as non-Clifford gates.
+        Note that for max_len=6 and a cost of 2.5 for q gates we can create all sequences up to
+        a total cost of 8.
 
         Note: There might be simpler approaches that achieve the same end result. This approach
         was build on top of the approach provided by the original trasyn repo.
+        
         """
 
         self.trivial_clifford_gates = trivial_clifford_gates
@@ -48,10 +52,10 @@ class SequenceCreator:
             self.nontrivial_clifford_gates + self.trivial_clifford_gates
         )
         self.non_clifford_gates = non_clifford_gates
-        self.asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/test_{self.non_clifford_gates}{self.clifford_gates}/"
+        self.asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/{self.non_clifford_gates}{self.clifford_gates}/"
         Path(self.asset_dir).mkdir(parents=True, exist_ok=True)
         self._t_asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/t{self.clifford_gates}/"
-        self.max_len = 3
+        self.max_len = max_len
         self.max_t_equiv = max_t_equiv
         self._temp_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/temp/{self.non_clifford_gates}{self.clifford_gates}/"
 
