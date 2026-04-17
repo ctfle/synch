@@ -1,12 +1,16 @@
 import json
 import os
+from itertools import product, chain
+from pathlib import Path
+
 import numpy as np
 
-from trasyn.utils import replace, replace_and_drop, count_t_equiv
+from trasyn.gates import sqrt_t, t
+from trasyn.synthesis import _substitute_duplicates
+from trasyn.utils import replace, replace_and_drop, count_t_equiv, seq2mat, trace
 
 try:
     import cupy as cp
-
     asnumpy = cp.asnumpy
 except ModuleNotFoundError:
     cp = np
@@ -21,30 +25,31 @@ nonclifford_gates = "tq"
 MAX_LEN = 6
 
 # Max T-equivalent to process (covers up to length=4 with q's)
-MAX_T_EQUIV = 10  # max value = 6*q = 15 T-equivalent.
+MAX_T_EQUIV = 8  # max value = 6*q = 15 T-equivalent.
 
 # Original directory (input)
-ORIG_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gates}{clifford_gates}_large/"
+ORIG_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/{nonclifford_gates}{clifford_gates}_large/"
 
 # New directory for T-equivalent grouping (output)
-NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5/"
+NEW_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/{nonclifford_gates}{clifford_gates}_tequiv_large_cost_2.5/"
 
 os.makedirs(NEW_DIR, exist_ok=True)
 
 
+
 if __name__ == "__main__":
     # Load base Clifford data (0 non-Cliffords, same for both)
-    matrices_0 = np.load(f"{ORIG_DIR}tensor_0.npy")
-    with open(f"{ORIG_DIR}sequences_0.json", "r", encoding="utf-8") as file:
+    matrices_0 = np.load(f"{self._temp_dir}tensor_0.npy")
+    with open(f"{self._temp_dir}sequences_0.json", "r", encoding="utf-8") as file:
         sequences_0 = json.load(file)
-    with open(f"{ORIG_DIR}duplicates_0.json", "r", encoding="utf-8") as file:
+    with open(f"{self._temp_dir}duplicates_0.json", "r", encoding="utf-8") as file:
         duplicates_0 = json.load(file)
 
     # Save base to new dir (unchanged)
-    np.save(f"{NEW_DIR}tensor_0.0.npy", matrices_0)
-    with open(f"{NEW_DIR}sequences_0.0.json", "w", encoding="utf-8") as file:
+    np.save(f"{self.asset_dir}tensor_0.0.npy", matrices_0)
+    with open(f"{self.asset_dir}sequences_0.0.json", "w", encoding="utf-8") as file:
         json.dump(sequences_0, file, indent=4)
-    with open(f"{NEW_DIR}duplicates_0.0.json", "w", encoding="utf-8") as file:
+    with open(f"{self.asset_dir}duplicates_0.0.json", "w", encoding="utf-8") as file:
         json.dump(duplicates_0, file, indent=4)
 
     print("Base Clifford data copied (0 T-equivalent).")
@@ -56,10 +61,10 @@ if __name__ == "__main__":
 
     # Load ALL original data first
     for orig_length in range(1, MAX_LEN + 1):
-        matrices_k = np.load(f"{ORIG_DIR}tensor_{orig_length}.npy")
-        with open(f"{ORIG_DIR}sequences_{orig_length}.json", "r") as f:
+        matrices_k = np.load(f"{self._temp_dir}tensor_{orig_length}.npy")
+        with open(f"{self._temp_dir}sequences_{orig_length}.json", "r") as f:
             sequences_k = json.load(f)
-        with open(f"{ORIG_DIR}duplicates_{orig_length}.json", "r") as f:
+        with open(f"{self._temp_dir}duplicates_{orig_length}.json", "r") as f:
             duplicates_k = json.load(f)
 
         duplicates_k = replace_and_drop(duplicates_k, "qq", "t")
@@ -100,12 +105,12 @@ if __name__ == "__main__":
             print(f"T-equivalent {t_equiv}: empty bucket")
             # Create empty files for consistency
             np.save(
-                f"{NEW_DIR}tensor_{t_equiv}.npy", np.empty((2, 0, 2), dtype=complex)
+                f"{self.asset_dir}tensor_{t_equiv}.npy", np.empty((2, 0, 2), dtype=complex)
             )
-            with open(f"{NEW_DIR}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
+            with open(f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
                 json.dump([], f, indent=4)
             with open(
-                f"{NEW_DIR}duplicates_{t_equiv}.json", "w", encoding="utf-8"
+                f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8"
             ) as f:
                 json.dump({}, f, indent=4)
             continue
@@ -114,14 +119,14 @@ if __name__ == "__main__":
             f"\nProcessing T-equivalent {t_equiv}: {len(all_sequences[t_equiv])} candidates"
         )
 
-        np.save(f"{NEW_DIR}tensor_{t_equiv}.npy", all_matrices[t_equiv])
-        with open(f"{NEW_DIR}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
+        np.save(f"{self.asset_dir}tensor_{t_equiv}.npy", all_matrices[t_equiv])
+        with open(f"{self.asset_dir}sequences_{t_equiv}.json", "w", encoding="utf-8") as f:
             json.dump(all_sequences[t_equiv], f, indent=4)
-        with open(f"{NEW_DIR}duplicates_{t_equiv}.json", "w", encoding="utf-8") as f:
+        with open(f"{self.asset_dir}duplicates_{t_equiv}.json", "w", encoding="utf-8") as f:
             json.dump(all_duplicates[t_equiv], f, indent=4)
 
         print(
             f"T-equivalent {t_equiv}: {len(all_sequences[t_equiv])} unique sequences saved"
         )
 
-    print(f"\nRegrouping complete! New files in {NEW_DIR}")
+    print(f"\nRegrouping complete! New files in {self.asset_dir}")
