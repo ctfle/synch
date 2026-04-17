@@ -436,7 +436,7 @@ class Synthesiser:
         for budget in self.budget_composition:
             retrieved_result = self.cache.retrieve(target_unitary, budget)
             if retrieved_result is not None:
-                print(f"retrieved result at budget {sum(budget)}")
+                print(f"retrieved cached result at total cost {sum(budget)}")
                 if retrieved_result.error < result.error:
                     result = retrieved_result
                 continue
