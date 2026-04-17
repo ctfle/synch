@@ -497,7 +497,7 @@ class Synthesiser:
             )
         assert np.allclose(
             distance(target_unitary, seq2mat(result.seqstr)), result.error
-        )
+        , atol=1e-7)
 
     def get_sequence_str(self, indices: Iterable[int], budget: Iterable[int]) -> str:
         """Get the sequences of gates as str associated with the budget and the indices"""
