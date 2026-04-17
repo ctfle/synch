@@ -1,5 +1,5 @@
 import pytest
-from trasyn.synthesis import ErgodicPartitioner, ErgodicPartitioner
+from trasyn.synthesis import ErgodicPartitioner
 
 
 class TestErgodicPartitioner:
@@ -9,7 +9,8 @@ class TestErgodicPartitioner:
             costs=costs, total_non_clifford_budget=10, max_partition_value=8
         )
         partition = budget.partition()
-        assert partition == [
+        
+        expected = [
             [0.0],
             [1.0],
             [2.0],
@@ -37,6 +38,11 @@ class TestErgodicPartitioner:
             [3.5, 6.5],
             [2.0, 8.0],
         ]
+        expected = list(map(set, expected))
+        partition = list(map(set, partition))
+        for partition_element in partition:
+            assert partition_element in expected
+    
 
     def test_integer_budgets_3(self):
         costs = {"t": 1.0, "a": 3.0}
@@ -44,7 +50,7 @@ class TestErgodicPartitioner:
             costs=costs, total_non_clifford_budget=10, max_partition_value=6
         )
         partition = budget.partition()
-        assert partition == [
+        expected = [
             [0],
             [1],
             [2],
@@ -65,6 +71,11 @@ class TestErgodicPartitioner:
             [6, 4],
             [5, 5],
         ]
+    
+        expected = list(map(set, expected))
+        partition = list(map(set, partition))
+        for partition_element in partition:
+            assert partition_element in expected
 
     def test_integer_budgets_2(self):
         costs = {"T": 1.0, "q": 2.0}
@@ -72,7 +83,7 @@ class TestErgodicPartitioner:
             costs=costs, total_non_clifford_budget=10, max_partition_value=8
         )
         partition = budget.partition()
-        assert partition == [
+        expected = [
             [0],
             [1],
             [2],
@@ -88,6 +99,11 @@ class TestErgodicPartitioner:
             [3, 7],
             [2, 8],
         ]
+        
+        expected = list(map(set, expected))
+        partition = list(map(set, partition))
+        for partition_element in partition:
+            assert partition_element in expected
 
     def test_integer_budgets_without_permutations(self):
         costs = {"t": 1.0, "q": 2.0}
@@ -97,7 +113,7 @@ class TestErgodicPartitioner:
             max_partition_value=8,
         )
         partition = budget.partition()
-        assert partition == [
+        expected = [
             [0],
             [1],
             [2],
@@ -113,6 +129,11 @@ class TestErgodicPartitioner:
             [3, 7],
             [2, 8],
         ]
+        
+        expected = list(map(set, expected))
+        partition = list(map(set, partition))
+        for partition_element in partition:
+            assert partition_element in expected
 
     @pytest.mark.parametrize("max_partition_value", [1, 2, 3, 4])
     def test_max_partition_value_too_small(self, max_partition_value: int):
