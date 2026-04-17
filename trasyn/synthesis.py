@@ -1,3 +1,4 @@
+import fcntl
 import json
 import pickle
 import warnings
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Literal, Iterable
 
 from abc import abstractmethod, ABC
+
 from trasyn.utils import (
     can_partition_with_multiples,
     distance,
@@ -328,7 +330,7 @@ class ErgodicPartitioner(BudgetPartitioner):
             remaining.remove(best_e)
 
         return (len(subset), set(subset)) if find_unsupported_trajectories(self.costs, subset) == [] else (None, None)
-    
+
     def _evaluate_remainder(self, subset: list[list[int | float]], elements: list[list[int | float]]):
         total_cost = sum(elements[0])
         return len(find_unsupported_trajectories(self.costs, subset)) if subset else len(
@@ -351,7 +353,7 @@ class Synthesiser:
         self.num_attempts = num_attempts
         self.budget_partitioner = partitioner
         self.cache = UnitaryCache(cache_dir) if cache_dir is not None else UnitaryCache(self.load_dir)
-        
+
     @property
     def mem_size(self):
         return get_available_memory(gpu=False)
@@ -425,6 +427,7 @@ class Synthesiser:
         for budget in self.budget_composition:
             retrieved_result = self.cache.retrieve(target_unitary, budget)
             if retrieved_result is not None:
+                print(f"retrieved result at budget {sum(budget)}")
                 if retrieved_result.error < result.error:
                     result = retrieved_result
                 continue
@@ -436,7 +439,7 @@ class Synthesiser:
         self.cache.save_cache()
         return result
 
-    def _create_mps_and_sample(self, budget: list[int] | list[float], target_unitary: NDArray, 
+    def _create_mps_and_sample(self, budget: list[int] | list[float], target_unitary: NDArray,
                          current_result: SynthesisResult, verbose: bool = False):
         fidelity = 0
         bitstring = None
@@ -495,34 +498,57 @@ class Synthesiser:
 class UnitaryCache:
     """ Helper class to cache results """
 
-    def __init__(self, load_dir: str):
+    def __init__(self, load_dir: str, precision=1e-10):
         self.load_dir = load_dir
         self._cached_results = self.load_cache()
-        
+        self._precision_factor = int(1/precision)
+
     def load_cache(self):
         """ Check the load_dir for possible cached results and load the into memory. """
-        
-        if Path(self.load_dir + "/cache").exists():
-            with open(self.load_dir + "/cache/unitary_cache.pkl", "rb") as handle:
-                cache = pickle.load(handle)
+
+        if Path(self.load_dir + "/unitary_cache.pkl").exists():
+            cache = self._safe_read(self.load_dir + "/unitary_cache.pkl")
         else:
             cache: dict[tuple, SynthesisResult] = dict()
-    
+
         return cache
-    
+
     def save_cache(self):
-        os.makedirs(self.load_dir + "/cache", exist_ok=True)
-        with open(self.load_dir + "/cache/unitary_cache.pkl", "wb") as handle:
-            pickle.dump(self._cached_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
+        os.makedirs(self.load_dir, exist_ok=True)
+        self._safe_write(self.load_dir + "/unitary_cache.pkl", self._cached_results)
+
+    def _safe_write(self, filename, data):
+        with open(filename, 'wb') as file:
+            # Get an exclusive lock (blocks until available)
+            fcntl.flock(file, fcntl.LOCK_EX)
+            pickle.dump(data, file)
+            # Lock is automatically released when file closes
+            fcntl.flock(file, fcntl.LOCK_UN)
+
+    def _safe_read(self, filename) -> dict[tuple, SynthesisResult] :
+        with open(filename, 'rb') as file:
+            # Get a shared lock (allows other readers, blocks writers)
+            fcntl.flock(file, fcntl.LOCK_SH)
+            data = pickle.load(file)
+            fcntl.flock(file, fcntl.LOCK_UN)
+            return data
+
     def _get_key(self, mat: NDArray, budget: list[float]) -> tuple:
         assert mat.shape == (2,2), "only 2x2 matrices allowed"
         mat_f = np.array(mat, copy=True)
         xs_t = tuple(budget)
-        return (mat_f[0, 0], mat_f[0, 1], mat_f[1, 0], mat_f[1, 1], xs_t)
-    
+        stabilised_mat_vals = tuple(map(self._stabilize_complex, (mat_f[0, 0], mat_f[0, 1],
+                                                                  mat_f[1, 0], mat_f[1, 1])))
+        stabilised_budget = tuple(map(lambda x: int(round(x*10)), xs_t))
+
+        return  stabilised_mat_vals + (stabilised_budget, )
+
+    def _stabilize_complex(self, value):
+        return (int(round(value.real * self._precision_factor)),
+                int(round(value.imag * self._precision_factor)))
+
     def retrieve(self, mat: NDArray, budget: list[float]) -> SynthesisResult | None:
-        key = self._get_key(mat, budget)        
+        key = self._get_key(mat, budget)
         return self._cached_results.get(key, None)
     
     def insert(self, mat: NDArray, budget: list[float], result: SynthesisResult):

@@ -22,7 +22,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 cupy-cuda11 = ["cupy-cuda11x>=13.3.0"]
-cupy-cuda12 = ["cupy-cuda12x>=13.3.0"]
+cupy-cuda13 = ["cupyx>=13.3.0"]
 qiskit = ["qiskit>=1.2.4"]
 
 [project.scripts]
