@@ -37,7 +37,7 @@ partitioner = ErgodicPartitioner(
 synthesiser = Synthesiser(partitioner=partitioner)
 
 target_unitary = random_unitary_2x2()
-result = synthesiser.sample_and_synthesize(target_unitary, verbose=False)
+result = synthesiser.sample_and_synthesize(target_unitary)
 
 error = result.error
 sequence_str = result.seqstr
