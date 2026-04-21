@@ -16,7 +16,7 @@ if __name__ == "__main__":
     max_budget = 8
     num_attempts = 5
     num_samples = 20000
-    max_partition_value = 10
+    max_partition_value = 8
     save_dir = f"./test_benchmark_results_{n_unitaries}_seed_{SEED}_num_attempts_{num_attempts}_num_samples_{num_samples}_max_partition_value={max_partition_value}"
     gate_set_cost_25 = "tqshxyz"
 

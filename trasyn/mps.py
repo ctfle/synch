@@ -146,19 +146,6 @@ def _sample(
     max_fixed_fraction: float = 0,
     rng: np.random.Generator | int | None = None,
 ) -> tuple[NDArray[np.int64], float]:
-    """
-    At a high level: samples the (conditional) probabilities
-    - I dont understand how exactly the conditional probabilites/ corresponding tensors are c
-    onstructed exactly.
-    - In each step of the loop, takes num_samples many elements (instead of all if num_samples < all)
-    - uses this sample of tensors to get the next projected tensors. I think its this line:
-
-            projected_tsr = xp.tensordot(projected_tsr, tsr, axes=1).reshape(
-            -1, tsr.shape[2]
-        )
-        where projected_tsr is a tensor with only num_samples many
-
-    """
 
     if cp is np:
         xp = np

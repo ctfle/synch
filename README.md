@@ -3,126 +3,42 @@
 
 ## Install
 ### Minimum Installation
+From the root of the project install via pip
 ```bash
-pip install trasyn
+pip install -e .
 ```
 
 ### GPU Acceleration
 It is highly recommended to install `cupy` for GPU acceleration:
 ```bash
-pip install trasyn[cupy-cuda12] # or [cupy-cuda11] depending on CUDA version
+pip install -e ".[cupy-cuda13]" # or [cupy-cuda11] depending on CUDA version
 ```
 The CUDA Toolkit version can be found using `nvcc --version`.
 
-### Qiskit Integration
-Optionally, `qiskit` may be installed to support features like full-circuit transpilation and synthesis.
-```bash
-pip install trasyn[qiskit]
-```
 
 ## Usage
 ### Synthesize a single-qubit unitary
-`trasyn.synthesize(target, nonclifford_budget)` takes a target unitary matrix (in the form of a numpy array, three angles for U(theta, phi, lam), or a single Rz angle) and a non-Clifford gate count budget and outputs a gate sequence string of the target gate set, the corresponding matrix, and the distance to the target.
+To synthesise a single qubit unitary using $T$ and $\sqrt{T}$ gates (using the gate sequences
+provided in this package) we first need to set up a partitioner. This step is important to ensure
+the synthesiser can sample from all sequences (and not just a subset). The `Partitioner` creates a 
+a sequence of partitionings of the total cost allowance (if required) into smaller parts so that any 
+possible sequence of $T$ and $\sqrt{T}$ (up to the cost allowance) is at least contained in one of 
+the partitionings.
 
 ```Python console
->>> seq, mat, err = trasyn.synthesize(trasyn.gates.t(), nonclifford_budget=10)
->>> print(seq, err)
-t 0.0
->>> seq, mat, err = trasyn.synthesize([0.1, 0.2, 0.3], nonclifford_budget=20) # U(0.1, 0.2, 0.3)
->>> print(seq, err, seq.count("t"))
-yththyththththxthththythththxththxththxththxthsz 0.0018002056473114445 19
->>> seq, mat, err = trasyn.synthesize(pi / 16, 30, error_threshold=0.001) # Rz(pi/16)
->>> print(seq, err, seq.count("t"))
-hththththxththththththxthththxththththththxththths 0.0005551347294707683 22
+from trasyn.synthesis import ErgodicPartitioner, Synthesiser
+from trasyn.utils import random_unitary_2x2
+
+partitioner = ErgodicPartitioner(
+            max_partition_value=8,
+            total_non_clifford_budget=10,
+            costs={"t": 1.0, "q": 2.5}, # q represents sqrtT
+        )
+synthesiser = Synthesiser(partitioner=partitioner)
+
+target_unitary = random_unitary_2x2()
+result = synthesiser.sample_and_synthesize(target_unitary, verbose=False)
+
+error = result.error
+sequence_str = result.seqstr
 ```
-
-#### Full list of `synthesize()` arguments
-
-- `target_unitary` : NDArray | Sequence[float] | float
-    
-    The target unitary matrix, three angles for U(theta, phi, lam), or a single Rz angle.
-
-- `nonclifford_budget` : int | Sequence[int]
-    
-    The budget for non-Clifford gates (e.g. T gates). Can be a single integer representing the total budget or a sequence of integers specifying the budget for each tensor.
-
-- `error_threshold` : float, optional
-    
-    The synthesis error threshold for the method to return once it is met. Note that this is
-    not a hard constraint; the method will return the best solution found after all
-    attempts if the error threshold is not met or it is not specified. Default is None.
-
-- `gate_set` : "tsh" or "tshxyz", optional
-    
-    The target gate set. Gates are listed in the order of cost. Additional gate sets can be
-    added with the unique_matrices.py script. This process will be made more user-friendly 
-    in the future. Default is "tshxyz".
-
-- `num_attempts` : int, optional
-    
-    The number of sampling attempts per budget configuration. Default is 5.
-
-- `num_samples` : int, optional
-    
-    The number of samples to in the sampling process. If None, it is calculated based on 
-    available memory. Default is None.
-
-- `gpu` : bool, optional
-    
-    Whether to use GPU for synthesis. Default is True.
-
-- `rng` : numpy.random.Generator | int, optional
-    
-    Random number generator or seed for reproducibility. Default is None.
-
-- `verbose` : bool, optional
-    
-    Whether to print verbose output during synthesis. Default is False.
-
-
-### Synthesize a Qiskit circuit
-Given a Qiskit circuit, `trasyn.synthesize_qiskit_circuit(circuit, u3_transpile=True)` transpiles it to CNOT+U3 and synthesizes each U3 gate to bring the full circuit to Clifford+T. The transpilation step attempts various configurations to minimize the nontrivial U3 count and thus, the total T count.
-
-### Use in Command-line
-Synthesize a single-qubit unitary:
-```console
-$ trasyn 'rz(pi/16)' 30
-Sequence: hththththxththththththxthththxththththththxththths, Error: 0.0005551347294707683, T-count: 22
-```
-
-Synthesize a qasm circuit (need Qiskit to be installed):
-```console
-$ trasyn circuit.qasm 20 -s synthesized.qasm
-```
-
-#### Full list of flags
-```
-usage: trasyn [-h] [-e ERROR_THRESHOLD] [-g GATE_SET] [--num-attempts NUM_ATTEMPTS] [--num-samples NUM_SAMPLES] [-c] [--seed SEED] [-v] [-s SAVE_PATH] [--skip-transpile] target budget
-
-Synthesize a single-qubit unitary or a qasm circuit to Clifford+T.
-
-positional arguments:
-  target                An expression of the target unitary or a filename, e.g. 'Rz(3*pi/8)', 'u(0.1, pi+0.2, 0.3**0.5)', 'unitary.npy', or 'circuit.qasm'.
-  budget                The non-Clifford gate budget for synthesis.
-
-options:
-  -h, --help            show this help message and exit
-  -e ERROR_THRESHOLD, --error-threshold ERROR_THRESHOLD
-                        The synthesis error threshold for the method to return once it is met. Note that this is not a hard constraint; the method will return the best solution found after all attempts if the error threshold is not
-                        met or it is not specified. Default is None.
-  -g GATE_SET, --gate-set GATE_SET
-                        The target gate set. Gates are listed in the order of cost. Additional gate sets can be added with the unique_matrices.py script. This process will be made more user-friendly in the future. Default is
-                        'tshxyz'.
-  --num-attempts NUM_ATTEMPTS, --na NUM_ATTEMPTS
-                        The number of sampling attempts per budget configuration. Default is 5.
-  --num-samples NUM_SAMPLES, --ns NUM_SAMPLES
-                        The number of samples in the sampling process. If None, it is calculated based on available memory. Default is None.
-  -c, --cpu-only        Do not use GPU for synthesis.
-  --seed SEED           Random seed for reproducibility.
-  -v, --verbose         Enable verbose output.
-  -s SAVE_PATH, --save-path SAVE_PATH
-                        Path to save the synthesized circuit. Default is '<target>_synthesized.qasm' if target is a QASM circuit.
-  --skip-transpile, --st
-                        Skip the transpilation step for circuit synthesis.
-```
-

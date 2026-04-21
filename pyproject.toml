@@ -4,20 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trasyn"
-authors = [{ name = "Tianyi Hao", email = "tianyi.hao@wisc.edu" }]
-description = "trasyn: a unitary synthesis method for fault-tolerant quantum computing"
+authors = [{ 
+name = "Christoph Fleckenstein (based on work from Tianyi Hao)", 
+email = "c.fleckenstein@parityqc.com" }]
+description = "synch: a unitary synthesis method for fault-tolerant quantum computing using gates from the Clifford hierarchy"
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["quantum computing"]
 license = "MIT"
 license-files = ["LICENSE"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Topic :: Scientific/Engineering :: Quantum Computing",
-    "Intended Audience :: Science/Research",
-    "Intended Audience :: Developers",
-]
-dependencies = ["numpy>=1.26.4", "psutil>=6", "sympy", "tqdm", "matplotlib"]
+dependencies = ["numpy>=1.26.4", "psutil>=6", "sympy", "tqdm", "matplotlib", "scipy"]
 dynamic = ["version"]
 
 [project.optional-dependencies]
@@ -25,11 +21,8 @@ cupy-cuda11 = ["cupy-cuda11x>=13.3.0"]
 cupy-cuda13 = ["cupyx>=13.3.0"]
 qiskit = ["qiskit>=1.2.4"]
 
-[project.scripts]
-trasyn = "trasyn.__main__:main"
-
 [project.urls]
-"Repository" = "https://github.com/haoty/trasyn"
+"Repository" = "https://github.com/ctfle/synch"
 
 [tool.setuptools]
 packages = ["trasyn"]
