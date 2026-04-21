@@ -11,65 +11,6 @@ import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 
 
-def fit_and_plot(n: list[int | float], error: NDArray, d_error: NDArray, color: str):
-    # Transform to log(1/ε)
-    propagated_error = 1 / error * d_error
-    # Fit linear regression
-    params = np.polyfit(np.log(1 / error), n, 1, w=1 / propagated_error)
-    # Plot fit line
-    n_fit = np.linspace(min(n), max(n), 100)
-    plt.plot(
-        n_fit,
-        np.exp(1 / params[0] * n_fit - params[1] / params[0]),
-        "--",
-        color=color,
-        label=f"fit: n =  ${np.round(params[0], 2)} \\log(1/\\epsilon)$",
-    )
-
-
-def fit_and_plot_with_scipy(
-    n: list[int | float], error: NDArray, d_error: NDArray, color: str
-):
-    def _func(x, a, b):
-        return b * np.exp(a * x)
-
-    n, d_error, error = filter_for_zero_error(n, d_error, error)
-
-    popt, pcov = scipy.optimize.curve_fit(
-        _func, n, 1 / error, sigma=(1 / error**2 * d_error)
-    )
-    perr = np.sqrt(np.diag(pcov))
-    perr_prop = 1 / popt[0] ** 2 * perr[0]
-    plt.plot(
-        n,
-        _func(n, *popt),
-        "--",
-        label=f"$n = ({np.round(1 / popt[0], 2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon)$",
-        color=color,
-    )
-
-
-def fit_raw_data(n: list[int | float], error: NDArray, color: str):
-    pairs = np.array(sorted(zip(n, error)))
-    n, error = zip(*pairs)
-    n = np.array(n)
-    error = np.array(error)
-
-    def _func(x, a, b):
-        return b * np.exp(a * x)
-
-    popt, pcov = scipy.optimize.curve_fit(_func, n, 1 / error)
-    perr = np.sqrt(np.diag(pcov))
-    perr_prop = 1 / popt[0] ** 2 * perr[0]
-    plt.plot(
-        sorted(n),
-        sorted(_func(n, *popt)),
-        "--",
-        label=f"$n = ({np.round(1 / popt[0], 2)} \pm {np.round(perr_prop, 2)})\log(1/\epsilon)$",
-        color=color,
-    )
-
-
 def fit_raw_data_log(ax: Axes, n: list[int | float], error: NDArray, color: str):
     pairs = np.array(sorted(zip(n, error)))
     n, error = zip(*pairs)
@@ -80,12 +21,10 @@ def fit_raw_data_log(ax: Axes, n: list[int | float], error: NDArray, color: str)
         return b + a * x
 
     popt, pcov = scipy.optimize.curve_fit(_func, n, np.log(1 / error))
-    perr = np.sqrt(np.diag(pcov))
     (line,) = plt.plot(
         sorted(n),
         sorted(np.exp(_func(n, *popt))),
         "--",
-        # label=f"$n = ({np.round(1 / popt[0], 3)} \pm {np.round(perr_prop, 3)})\log(1/\epsilon) - {np.round(popt[1]/popt[0], 3)}$",
         label=f"$R = {np.round((1 / popt[0]) * np.log(2), 2)}\log_2(1/\epsilon) - {np.round(popt[1] / popt[0], 2)}$",
         color=color,
         linewidth=2,
@@ -206,44 +145,6 @@ def get_high_err(data):
     return high - median
 
 
-def rescale_costs(
-    error_data: list[float],
-    seqs_str: list[str],
-    budget: float | int,
-    costs: dict[str, float],
-) -> dict[int | float, list[float]]:
-    """Sorts the data into new buckets"""
-    errors = {}
-    for error, seq in zip(error_data, seqs_str):
-        total_cost = eval_cost(seq, costs)
-        if total_cost > budget:
-            if total_cost not in errors:
-                errors[total_cost] = [error]
-            else:
-                errors[total_cost].append(error)
-
-        else:
-            if budget not in errors:
-                errors[budget] = [error]
-            else:
-                errors[budget].append(error)
-
-    return errors
-
-
-def eval_cost(seq: str, costs: dict[str, float]):
-    total_cost = 0
-    for gate, cost in costs.items():
-        total_cost += seq.count(gate) * cost
-
-    return total_cost
-
-
-def merge(a: dict[int | float, list], b: dict[int | float, list]):
-    all_keys = set(a) | set(b)
-    return {key: a.get(key, []) + b.get(key, []) for key in all_keys}
-
-
 def unfold(data: dict[int | list[float]]):
     key_list = []
     val_list = []
@@ -328,59 +229,3 @@ def benchmark_on_random_unitaries(
         pickle.dump(
             budget_data, open(f"{save_dir}/budget_{nc_budget}_results.pkl", "wb")
         )
-
-
-def benchmark_budget(
-    unitaries: list[NDArray],
-    budget: int | float,
-    partitioner: BudgetPartitioner,
-    load_dir: str,
-    seed: int,
-    save_dir: str = "./benchmark_results",
-    num_attempts: int = 5,
-    num_samples: int | None = None,
-):
-    # Ensure save directory exists
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    syn = Synthesiser(
-        partitioner=partitioner,
-        load_dir=load_dir,
-        num_attempts=num_attempts,
-        num_samples=num_samples,
-    )
-    errors = []
-    seqs = []
-    target_unitaries = []
-    for target_unitary in tqdm(unitaries, desc="unitaries", leave=False, position=1):
-        result = syn.sample_and_synthesize(target_unitary, verbose=False)
-        errors.append(result.error)
-        seqs.append(result.seqstr)
-        target_unitaries.append(result.target_unitary)
-
-    # Save per-budget checkpoint
-    budget_data = {
-        "error_data": errors,
-        "seqstr_data": seqs,
-        "n_unitaries_per_budget": len(unitaries),
-        "seed": seed,
-        "target_unitaries": target_unitaries,
-    }
-    pickle.dump(
-        budget_data,
-        open(f"{save_dir}/budget_{budget}_num_samples_{num_samples}_results.pkl", "wb"),
-    )
-
-
-def get_suitable_num_samples(budget: int):
-    """These number of samples are obtained by empirically checking convergence
-    of the corresponding errors."""
-    if budget <= 5:
-        num_samples = 1000
-    elif budget > 5 and budget < 10:
-        num_samples = 3000
-    elif budget >= 10 and budget < 15:
-        num_samples = 10_000 + 5000 * (budget - 10)
-    else:
-        num_samples = 35_000 + 10_000 * (budget - 15)
-
-    return num_samples
