@@ -2,8 +2,8 @@ import random
 
 import numpy as np
 import pytest
-from trasyn.synthesis import Synthesiser, ErgodicPartitioner
-from trasyn.utils import random_unitary_2x2, seq2mat, distance
+from trasyn.src.synthesis import Synthesiser, ErgodicPartitioner
+from trasyn.src.utils import random_unitary_2x2, seq2mat, distance
 
 
 def unitary_from_budget(t_budget: int, q_budget: int, total_len: int) -> str:

@@ -1,5 +1,5 @@
 import numpy as np
-from trasyn.benchmark.utils import (
+from trasyn.src.benchmark.utils import (
     generate_unitaries,
     benchmark_on_random_unitaries,
     SEED,

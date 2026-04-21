@@ -26,14 +26,14 @@ possible sequence of $T$ and $\sqrt{T}$ (up to the cost allowance) is at least c
 the partitionings.
 
 ```Python console
-from trasyn.synthesis import ErgodicPartitioner, Synthesiser
-from trasyn.utils import random_unitary_2x2
+from trasyn.src.synthesis import ErgodicPartitioner, Synthesiser
+from trasyn.src.utils import random_unitary_2x2
 
 partitioner = ErgodicPartitioner(
-            max_partition_value=8,
-            total_non_clifford_budget=10,
-            costs={"t": 1.0, "q": 2.5}, # q represents sqrtT
-        )
+    max_partition_value=8,
+    total_non_clifford_budget=10,
+    costs={"t": 1.0, "q": 2.5},  # q represents sqrtT
+)
 synthesiser = Synthesiser(partitioner=partitioner)
 
 target_unitary = random_unitary_2x2()

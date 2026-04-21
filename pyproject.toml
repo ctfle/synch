@@ -4,9 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trasyn"
-authors = [{ 
-name = "Christoph Fleckenstein (based on work from Tianyi Hao)", 
-email = "c.fleckenstein@parityqc.com" }]
+authors = [{ name = "Christoph Fleckenstein (based on work from Tianyi Hao)", email = "c.fleckenstein@parityqc.com" }]
 description = "synch: a unitary synthesis method for fault-tolerant quantum computing using gates from the Clifford hierarchy"
 readme = "README.md"
 requires-python = ">=3.10"

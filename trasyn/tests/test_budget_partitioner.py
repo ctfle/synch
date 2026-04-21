@@ -1,5 +1,5 @@
 import pytest
-from trasyn.synthesis import ErgodicPartitioner
+from trasyn.src.synthesis import ErgodicPartitioner
 
 
 class TestErgodicPartitioner:

@@ -10,7 +10,7 @@ from typing import Literal, Iterable
 
 from abc import abstractmethod, ABC
 
-from trasyn.utils import (
+from trasyn.src.utils import (
     can_partition_with_multiples,
     distance,
     seq2mat,
@@ -34,10 +34,10 @@ except ModuleNotFoundError:
     asnumpy = np.asarray
     MemError = MemoryError
 
-from trasyn.mps import _sample, _trace_target_unitary
-from trasyn.utils import get_available_memory
+from trasyn.src.mps import _sample, _trace_target_unitary
+from trasyn.src.utils import get_available_memory
 
-ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/assets"
+ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets"
 AVAILABLE_GATE_SETS = [
     dir_entry
     for dir_entry in sorted(os.listdir(ASSETS_DIR))
