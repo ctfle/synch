@@ -3,7 +3,7 @@
 A tensor network based approach to synthesise arbitrary single-qubit unitaries from 
 extended universal gate sets. Concretely, here we provide the gate set composed of Clifford,
 $T$ and $\sqrt{T}$. For details, check out our paper on [unfolded distillation](https://arxiv.org/abs/2604.15436)
-and the original work on tensor network based unitary synthesis [tensor network based unitary synthesis](https://arxiv.org/abs/2503.15843). 
+and the original work on [tensor network based unitary synthesis](https://arxiv.org/abs/2503.15843). 
 
 ## Install
 ### Minimum Installation
