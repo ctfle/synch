@@ -5,8 +5,8 @@ import scipy.optimize
 from matplotlib.axes import Axes
 from tqdm import tqdm
 import pickle
-from trasyn.src.synthesis import Synthesiser, ErgodicPartitioner
-from trasyn.src.utils import random_unitary_2x2
+from synch.src.synthesis import Synthesiser, ErgodicPartitioner
+from synch.src.utils import random_unitary_2x2
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 

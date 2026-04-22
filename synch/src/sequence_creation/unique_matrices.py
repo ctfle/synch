@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-from trasyn.src.gates import t
-from trasyn.src.synthesis import _substitute_duplicates
-from trasyn.src.utils import seq2mat, trace
+from synch.src.gates import t
+from synch.src.synthesis import _substitute_duplicates
+from synch.src.utils import seq2mat, trace
 
 try:
     import cupy as cp

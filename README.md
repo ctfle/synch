@@ -28,8 +28,8 @@ possible sequence of $T$ and $\sqrt{T}$ (up to the cost allowance) is at least c
 the partitionings.
 
 ```Python console
-from trasyn.src.synthesis import ErgodicPartitioner, Synthesiser
-from trasyn.src.utils import random_unitary_2x2
+from synch.src.synthesis import ErgodicPartitioner, Synthesiser
+from synch.src.utils import random_unitary_2x2
 
 partitioner = ErgodicPartitioner(
     max_partition_value=8,

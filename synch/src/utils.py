@@ -11,7 +11,7 @@ import numpy as np
 import psutil
 from numpy.typing import NDArray
 
-from trasyn.src.gates import GATES
+from synch.src.gates import GATES
 
 MAX_CACHE_LEN = 8
 

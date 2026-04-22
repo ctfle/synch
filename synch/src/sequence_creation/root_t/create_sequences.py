@@ -6,9 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
-from trasyn.src.gates import sqrt_t, t
-from trasyn.src.synthesis import _substitute_duplicates
-from trasyn.src.utils import replace, replace_and_drop, count_t_equiv, seq2mat, trace
+from synch.src.gates import sqrt_t, t
+from synch.src.synthesis import _substitute_duplicates
+from synch.src.utils import replace, replace_and_drop, count_t_equiv, seq2mat, trace
 
 try:
     import cupy as cp
