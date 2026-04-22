@@ -1,5 +1,9 @@
 # synch: an extension of trasyn using gates from the Clifford hierarchy
 
+A tensor network based approach to synthesise arbitrary single-qubit unitaries from 
+extended universal gate sets. Concretely, here we provide the gate set composed of Clifford,
+$T$ and $\sqrt{T}$. For details, check out our paper on [unfolded distillation](https://arxiv.org/abs/2604.15436)
+and the original work on tensor network based unitary synthesis [tensor network based unitary synthesis](https://arxiv.org/abs/2503.15843). 
 
 ## Install
 ### Minimum Installation
@@ -7,9 +11,7 @@ From the root of the project install via pip
 ```bash
 pip install -e .
 ```
-
-### GPU Acceleration
-It is highly recommended to install `cupy` for GPU acceleration:
+For GPU acceleration use
 ```bash
 pip install -e ".[cupy-cuda13]" # or [cupy-cuda11] depending on CUDA version
 ```

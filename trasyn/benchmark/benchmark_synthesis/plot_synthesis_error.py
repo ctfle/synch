@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-from trasyn.src.benchmark.utils import (
+from trasyn.benchmark.utils import (
     extract_budget_files,
     unfold,
     get_median_and_errors,

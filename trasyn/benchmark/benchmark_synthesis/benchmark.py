@@ -1,5 +1,5 @@
 import numpy as np
-from trasyn.src.benchmark.utils import generate_unitaries, benchmark_on_random_unitaries
+from trasyn.benchmark.utils import generate_unitaries, benchmark_on_random_unitaries
 
 SEED = 42
 np.random.seed(SEED)
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     benchmark_on_random_unitaries(
         unitaries=unitaries,
         budgets=np.arange(min_budget, max_budget, 0.5),
-        load_dir="../../../assets/" + gate_set_cost_25,
+        load_dir="../../assets/" + gate_set_cost_25,
         save_dir=save_dir + "/" + gate_set_cost_25,
         seed=SEED,
         costs={"t": 1.0, "q": 2.5},
