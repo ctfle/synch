@@ -1,6 +1,6 @@
 import pickle
 import matplotlib.pyplot as plt
-from synch.benchmark.utils import get_mean_and_std, extract_budget_files
+from synch.docs.utils import get_mean_and_std, extract_budget_files
 
 num_samples = [100, 1000, 10_000, 20_000, 30_000, 40_000]  # 100000]
 dirs = [

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-from synch.benchmark.utils import (
+from synch.docs.utils import (
     extract_budget_files,
     unfold,
     get_median_and_errors,

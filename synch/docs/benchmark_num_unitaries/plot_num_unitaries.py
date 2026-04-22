@@ -1,6 +1,6 @@
 import pickle
 import matplotlib.pyplot as plt
-from synch.benchmark.utils import get_mean_and_std, extract_budget_files
+from synch.docs.utils import get_mean_and_std, extract_budget_files
 
 num_unitaries = [10, 50, 100, 200, 500, 1000]  # 100000]
 dirs = [

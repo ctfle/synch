@@ -1,5 +1,5 @@
 import numpy as np
-from synch.benchmark.utils import (
+from synch.docs.utils import (
     generate_unitaries,
     benchmark_on_random_unitaries,
     SEED,
