@@ -21,7 +21,7 @@ nontrivial_cliffords = "sh"
 trivial_cliffords = "xyz"
 clifford_gates = nontrivial_cliffords + trivial_cliffords
 nonclifford_gate = "t"
-ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../assets/{nonclifford_gate}{clifford_gates}_large/"
+ASSETS_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/{nonclifford_gate}{clifford_gates}_large/"
 
 if __name__ == "__main__":
     Path(ASSETS_DIR).mkdir(exist_ok=True)

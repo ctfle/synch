@@ -52,12 +52,12 @@ class SequenceCreator:
             self.nontrivial_clifford_gates + self.trivial_clifford_gates
         )
         self.non_clifford_gates = non_clifford_gates
-        self.asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/{self.non_clifford_gates}{self.clifford_gates}/"
+        self.asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../../assets/{self.non_clifford_gates}{self.clifford_gates}/"
         Path(self.asset_dir).mkdir(parents=True, exist_ok=True)
-        self._t_asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/t{self.clifford_gates}/"
+        self._t_asset_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../../assets/t{self.clifford_gates}/"
         self.max_len = max_len
         self.max_t_equiv = max_t_equiv
-        self._temp_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../assets/temp/{self.non_clifford_gates}{self.clifford_gates}/"
+        self._temp_dir = f"{os.path.dirname(os.path.abspath(__file__))}/../../../assets/temp/{self.non_clifford_gates}{self.clifford_gates}/"
 
     def generate_unique_sequences(
         self,
