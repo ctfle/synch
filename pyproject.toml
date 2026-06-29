@@ -3,7 +3,7 @@ requires = ["setuptools>=78", "setuptools-scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "trasyn"
+name = "synch"
 authors = [{ name = "Christoph Fleckenstein (based on work from Tianyi Hao)", email = "c.fleckenstein@parityqc.com" }]
 description = "synch: a unitary synthesis method for fault-tolerant quantum computing using gates from the Clifford hierarchy"
 readme = "README.md"
@@ -23,7 +23,7 @@ qiskit = ["qiskit>=1.2.4"]
 "Repository" = "https://github.com/ctfle/synch"
 
 [tool.setuptools]
-packages = ["trasyn"]
+packages = ["synch"]
 
 [tool.black]
 line-length = 99 # override black's default line-length
